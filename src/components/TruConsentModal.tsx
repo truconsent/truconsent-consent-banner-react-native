@@ -208,9 +208,17 @@ export default function TruConsentModal(props: TruConsentConfig) {
               >
                 {displayError && (
                   <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>Error: {displayError}</Text>
+                    <Text style={styles.errorText}>
+                      {displayError.includes('Banner not found') 
+                        ? 'Banner not found. Please check the Banner ID and try again.'
+                        : displayError.includes('Authentication') || displayError.includes('Invalid')
+                        ? 'Authentication failed. Please check your API key and Organization ID.'
+                        : displayError.includes('forbidden')
+                        ? 'Access denied. Your API key does not have permission to access this banner.'
+                        : `Error: ${displayError}`}
+                    </Text>
                     <Text style={styles.errorSubtext}>
-                      Please check your API credentials and try again.
+                      Please check your API credentials and banner ID, then try again.
                     </Text>
                   </View>
                 )}
@@ -269,36 +277,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: isMobile ? 16 : 20,
+    paddingTop: isMobile ? 8 : 20,
+    paddingBottom: isMobile ? 8 : 20,
   },
   container: {
     backgroundColor: 'white',
-    borderRadius: isMobile ? 0 : 16,
+    borderRadius: 20,
     width: isMobile ? '100%' : '90%',
     maxWidth: 600,
-    height: isMobile ? '100%' : undefined,
-    maxHeight: isMobile ? '100%' : '90%',
-    padding: isMobile ? 0 : 20,
-    paddingTop: isMobile ? (Platform.OS === 'ios' ? 50 : 16) : 20,
-    paddingHorizontal: isMobile ? 0 : 20,
-    minHeight: isMobile ? SCREEN_HEIGHT : 200,
+    height: isMobile ? SCREEN_HEIGHT - 16 : undefined, // Use almost full height with minimal top/bottom padding
+    maxHeight: isMobile ? SCREEN_HEIGHT - 16 : '90%',
+    padding: isMobile ? 24 : 24,
+    minHeight: isMobile ? SCREEN_HEIGHT - 16 : 200,
     position: 'relative',
+    // Card popup styling
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8, // For Android
   },
   closeButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? (isMobile ? 50 : 10) : (isMobile ? 16 : 10),
-    right: 10,
-    width: 32,
-    height: 32,
+    top: 16,
+    right: 16,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   closeButtonText: {
-    fontSize: 24,
-    color: '#333',
-    fontWeight: 'bold',
+    fontSize: 20,
+    color: '#666',
+    fontWeight: '600',
+    lineHeight: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -316,8 +337,9 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   scrollContent: {
-    paddingBottom: isMobile ? 40 : 20,
+    paddingBottom: 20,
     flexGrow: 1,
+    minHeight: '100%',
   },
   errorContainer: {
     backgroundColor: '#fee2e2',

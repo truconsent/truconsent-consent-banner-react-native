@@ -20,7 +20,7 @@ import TruConsentModal from '@truconsent/consent-banner-react-native';
 export default function App() {
   const [apiKey, setApiKey] = useState('z7d141o8rbibx2btbcE6yRMXSErL0unLysWs4leu_Hbgn5duU3mqEQ');
   const [organizationId, setOrganizationId] = useState('acme-dev');
-  const [bannerId, setBannerId] = useState('CP099');
+  const [bannerId, setBannerId] = useState('CP102');
   const [userId, setUserId] = useState('user-MTQuMTk1LjM2LjEw');
   const [showModal, setShowModal] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);

@@ -58,10 +58,31 @@ export async function fetchBanner(config: FetchBannerConfig): Promise<Banner> {
   if (response.status === 403) {
     throw new Error('Access forbidden - API key does not have permission to access this banner');
   }
+  if (response.status === 404) {
+    throw new Error(`Banner not found - Banner ID "${bannerId}" does not exist or is not accessible`);
+  }
   if (!response.ok) {
-    const errorText = await response.text().catch(() => 'Unknown error');
-    console.error('Banner API error:', errorText);
-    throw new Error(`Failed to load banner: ${response.status} ${errorText}`);
+    let errorMessage = `Failed to load banner (${response.status})`;
+    try {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } else {
+        const errorText = await response.text();
+        // Try to extract meaningful error from HTML response
+        const match = errorText.match(/<p>(.*?)<\/p>/i);
+        if (match && match[1]) {
+          errorMessage = match[1].trim();
+        } else if (errorText && errorText.length < 200) {
+          errorMessage = errorText;
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing error response:', e);
+    }
+    console.error('Banner API error:', errorMessage);
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();

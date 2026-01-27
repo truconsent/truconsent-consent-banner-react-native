@@ -94,14 +94,15 @@ export default function BannerUI({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'white',
+    backgroundColor: 'transparent',
     borderRadius: 0,
-    overflow: 'hidden',
+    overflow: 'visible',
     width: '100%',
     flex: 1,
   },
   purposesContainer: {
     padding: 16,
+    paddingBottom: 8,
   },
   footerWrapper: {
     marginTop: 8,
