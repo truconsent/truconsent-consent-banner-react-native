@@ -3,8 +3,7 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '../utils/i18n';
+// I18nextProvider removed - using the one from TruConsentModal
 import { Banner } from '../core/types';
 import ModernBannerHeader from './ModernBannerHeader';
 import ModernPurposeCard from './ModernPurposeCard';
@@ -44,9 +43,15 @@ export default function BannerUI({
   const disclaimerText = settings.disclaimer_text;
   const actionButtonText = settings.action_button_text || 'I Consent';
 
+  console.log('BannerUI rendering with:', {
+    purposesCount: banner?.purposes?.length || 0,
+    companyName,
+    hasSettings: !!banner?.banner_settings,
+  });
+
+  // Remove nested I18nextProvider since TruConsentModal already provides it
   return (
-    <I18nextProvider i18n={i18n}>
-      <View style={styles.container}>
+    <View style={styles.container}>
         <ModernBannerHeader
           logoUrl={settings.logo_url || logoUrl}
           orgName={companyName}
@@ -55,15 +60,21 @@ export default function BannerUI({
         />
 
         <View style={styles.purposesContainer}>
-          {banner?.purposes?.map((p, index) => (
-            <View key={p.id} style={index > 0 && { marginTop: 16 }}>
-              <ModernPurposeCard
-                purpose={p}
-                banner={banner}
-                onToggle={onChangePurpose}
-              />
+          {banner?.purposes && banner.purposes.length > 0 ? (
+            banner.purposes.map((p, index) => (
+              <View key={p.id} style={index > 0 && { marginTop: 16 }}>
+                <ModernPurposeCard
+                  purpose={p}
+                  banner={banner}
+                  onToggle={onChangePurpose}
+                />
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No purposes available</Text>
             </View>
-          ))}
+          )}
         </View>
 
         <View style={styles.footerWrapper}>
@@ -77,22 +88,32 @@ export default function BannerUI({
             primaryColor={finalPrimaryColor}
           />
         </View>
-      </View>
-    </I18nextProvider>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 0,
     overflow: 'hidden',
+    width: '100%',
+    flex: 1,
   },
   purposesContainer: {
     padding: 16,
   },
   footerWrapper: {
     marginTop: 8,
+  },
+  emptyState: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
 

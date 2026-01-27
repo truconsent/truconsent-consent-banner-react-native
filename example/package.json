@@ -1,39 +1,26 @@
 {
-  "name": "truconsent-rn-example",
-  "version": "0.1.0",
-  "private": true,
+  "name": "example",
+  "version": "1.0.0",
+  "main": "index.ts",
   "scripts": {
-    "android": "react-native run-android",
-    "ios": "react-native run-ios",
-    "start": "react-native start",
-    "test": "jest",
-    "lint": "eslint ."
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
   },
   "dependencies": {
-    "react": "18.2.0",
-    "react-native": "0.72.6",
+    "@truconsent/consent-banner-react-native": "file:..",
+    "babel-preset-expo": "^54.0.10",
+    "expo": "~54.0.32",
+    "expo-status-bar": "~3.0.9",
+    "i18next": "^25.6.0",
+    "react": "19.1.0",
     "react-i18next": "^16.2.3",
-    "i18next": "^25.6.0"
+    "react-native": "0.81.5"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0",
-    "@babel/preset-env": "^7.20.0",
-    "@babel/runtime": "^7.20.0",
-    "@react-native/eslint-config": "^0.72.2",
-    "@react-native/metro-config": "^0.72.11",
-    "@tsconfig/react-native": "^3.0.0",
-    "@types/react": "^18.0.24",
-    "@types/react-test-renderer": "^18.0.0",
-    "babel-jest": "^29.2.1",
-    "eslint": "^8.19.0",
-    "jest": "^29.2.1",
-    "metro-react-native-babel-preset": "0.76.8",
-    "prettier": "^2.4.1",
-    "react-test-renderer": "18.2.0",
-    "typescript": "^5.0.0"
+    "@types/react": "~19.1.0",
+    "typescript": "~5.9.2"
   },
-  "engines": {
-    "node": ">=16"
-  }
+  "private": true
 }
-

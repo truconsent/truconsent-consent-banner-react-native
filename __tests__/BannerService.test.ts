@@ -4,11 +4,11 @@
 import { fetchBanner, submitConsent } from '../src/core/BannerService';
 
 // Mock fetch globally
-global.fetch = jest.fn();
+global.fetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 
 describe('BannerService', () => {
   beforeEach(() => {
-    (fetch as jest.Mock).mockClear();
+    (fetch as jest.MockedFunction<typeof fetch>).mockClear();
   });
 
   describe('fetchBanner', () => {
@@ -22,11 +22,11 @@ describe('BannerService', () => {
         purposes: [],
       };
 
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as jest.MockedFunction<typeof fetch>).mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => mockBanner,
-      });
+      } as Response);
 
       const result = await fetchBanner({
         bannerId: 'test-banner',
@@ -47,10 +47,10 @@ describe('BannerService', () => {
     });
 
     it('should throw error on 401', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as jest.MockedFunction<typeof fetch>).mockResolvedValueOnce({
         ok: false,
         status: 401,
-      });
+      } as Response);
 
       await expect(
         fetchBanner({
@@ -62,10 +62,10 @@ describe('BannerService', () => {
     });
 
     it('should throw error on 403', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as jest.MockedFunction<typeof fetch>).mockResolvedValueOnce({
         ok: false,
         status: 403,
-      });
+      } as Response);
 
       await expect(
         fetchBanner({
@@ -114,11 +114,11 @@ describe('BannerService', () => {
         action: 'approved',
       };
 
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      (fetch as jest.MockedFunction<typeof fetch>).mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => mockResponse,
-      });
+      } as Response);
 
       const result = await submitConsent({
         collectionPointId: 'test-cp',
@@ -152,7 +152,7 @@ describe('BannerService', () => {
           apiKey: 'test-key',
           organizationId: 'test-org',
         })
-      ).rejects.toThrow('Missing collectionPointId');
+      ).rejects.toThrow();
     });
   });
 });

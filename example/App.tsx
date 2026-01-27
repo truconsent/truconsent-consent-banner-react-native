@@ -12,14 +12,16 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import TruConsentModal from '@truconsent/consent-banner-react-native';
 
 export default function App() {
-  const [apiKey, setApiKey] = useState('');
-  const [organizationId, setOrganizationId] = useState('');
-  const [bannerId, setBannerId] = useState('');
-  const [userId, setUserId] = useState('test-user-' + Date.now());
+  const [apiKey, setApiKey] = useState('z7d141o8rbibx2btbcE6yRMXSErL0unLysWs4leu_Hbgn5duU3mqEQ');
+  const [organizationId, setOrganizationId] = useState('acme-dev');
+  const [bannerId, setBannerId] = useState('CP099');
+  const [userId, setUserId] = useState('user-MTQuMTk1LjM2LjEw');
   const [showModal, setShowModal] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
 
@@ -28,6 +30,7 @@ export default function App() {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
+    console.log('Opening modal with:', { apiKey: apiKey.substring(0, 10) + '...', organizationId, bannerId, userId });
     setShowModal(true);
   };
 
@@ -39,6 +42,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="auto" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>TruConsent SDK Test App</Text>
@@ -148,11 +152,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   label: {
     fontSize: 14,
@@ -201,11 +211,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   infoTitle: {
     fontSize: 16,
@@ -219,4 +235,3 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 });
-

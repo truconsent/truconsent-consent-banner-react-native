@@ -10,10 +10,12 @@ import {
   ActivityIndicator,
   StyleSheet,
   ScrollView,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '../utils/i18n';
-import { TruConsentConfig, ConsentAction, Banner } from '../core/types';
+import { TruConsentConfig, ConsentAction, Banner, Purpose } from '../core/types';
 import { useBanner } from '../hooks/useBanner';
 import { useConsent } from '../hooks/useConsent';
 import { submitConsent } from '../core/BannerService';
@@ -42,11 +44,22 @@ export default function TruConsentModal(props: TruConsentConfig) {
   const closeButtonClickedRef = useRef(false);
   const [requestId] = useState(() => generateRequestId());
 
-  const { banner, isLoading, error: bannerError } = useBanner(
-    bannerId && apiKey && organizationId
-      ? { bannerId, apiKey, organizationId, apiBaseUrl }
-      : null
-  );
+  const bannerConfig = bannerId && apiKey && organizationId
+    ? { bannerId, apiKey, organizationId, apiBaseUrl }
+    : null;
+
+  const { banner, isLoading, error: bannerError } = useBanner(bannerConfig);
+
+  // Log banner state for debugging
+  useEffect(() => {
+    console.log('TruConsentModal - Banner state:', {
+      isLoading,
+      hasBanner: !!banner,
+      error: bannerError,
+      bannerId,
+      purposesCount: banner?.purposes?.length || 0,
+    });
+  }, [isLoading, banner, bannerError, bannerId]);
 
   const { purposes, updatePurpose, acceptAll, rejectAll, acceptSelected, setPurposes } =
     useConsent(banner?.purposes || []);
@@ -154,6 +167,19 @@ export default function TruConsentModal(props: TruConsentConfig) {
 
   const displayError = error || bannerError;
 
+  // Debug logging
+  useEffect(() => {
+    if (banner) {
+      console.log('Banner loaded in modal:', {
+        bannerId: banner.banner_id,
+        title: banner.title || banner.name,
+        purposesCount: banner.purposes?.length || 0,
+        consentType: banner.consent_type,
+        hasSettings: !!banner.banner_settings,
+      });
+    }
+  }, [banner]);
+
   return (
     <I18nextProvider i18n={i18n}>
       <Modal
@@ -171,36 +197,60 @@ export default function TruConsentModal(props: TruConsentConfig) {
             {isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#3b82f6" />
-                <Text style={styles.loadingText}>Loading...</Text>
+                <Text style={styles.loadingText}>Loading banner...</Text>
               </View>
             ) : (
-              <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+              <ScrollView 
+                style={styles.scrollView} 
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={true}
+                bounces={false}
+              >
                 {displayError && (
                   <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{displayError}</Text>
+                    <Text style={styles.errorText}>Error: {displayError}</Text>
+                    <Text style={styles.errorSubtext}>
+                      Please check your API credentials and try again.
+                    </Text>
                   </View>
                 )}
 
-                {banner &&
-                  (banner.consent_type === 'cookie_consent' ? (
-                    <CookieBannerUI
-                      banner={banner}
-                      companyName={resolvedCompanyName}
-                      logoUrl={resolvedLogoUrl}
-                      onRejectAll={() => handleAction('declined')}
-                      onConsentAll={() => handleAction('approved')}
-                    />
-                  ) : (
-                    <BannerUI
-                      banner={{ ...banner, purposes }}
-                      companyName={resolvedCompanyName}
-                      logoUrl={resolvedLogoUrl}
-                      onChangePurpose={updatePurpose}
-                      onRejectAll={() => handleAction('declined')}
-                      onConsentAll={() => handleAction('approved')}
-                      onAcceptSelected={handleAcceptSelected}
-                    />
-                  ))}
+                {!displayError && !banner && (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>No banner data available</Text>
+                  </View>
+                )}
+
+                {!displayError && banner && (
+                  <>
+                    {banner.consent_type === 'cookie_consent' ? (
+                      <CookieBannerUI
+                        banner={banner}
+                        companyName={resolvedCompanyName}
+                        logoUrl={resolvedLogoUrl}
+                        onRejectAll={() => handleAction('declined')}
+                        onConsentAll={() => handleAction('approved')}
+                      />
+                    ) : (
+                      <BannerUI
+                        banner={{ ...banner, purposes }}
+                        companyName={resolvedCompanyName}
+                        logoUrl={resolvedLogoUrl}
+                        onChangePurpose={updatePurpose}
+                        onRejectAll={() => handleAction('declined')}
+                        onConsentAll={() => handleAction('approved')}
+                        onAcceptSelected={handleAcceptSelected}
+                      />
+                    )}
+                    {(!banner.purposes || banner.purposes.length === 0) && (
+                      <View style={styles.warningContainer}>
+                        <Text style={styles.warningText}>
+                          Warning: No purposes found in banner data
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
               </ScrollView>
             )}
           </View>
@@ -209,6 +259,9 @@ export default function TruConsentModal(props: TruConsentConfig) {
     </I18nextProvider>
   );
 }
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const isMobile = SCREEN_WIDTH < 768;
 
 const styles = StyleSheet.create({
   overlay: {
@@ -219,21 +272,28 @@ const styles = StyleSheet.create({
   },
   container: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    width: '90%',
+    borderRadius: isMobile ? 0 : 16,
+    width: isMobile ? '100%' : '90%',
     maxWidth: 600,
-    maxHeight: '90%',
-    padding: 20,
+    height: isMobile ? '100%' : undefined,
+    maxHeight: isMobile ? '100%' : '90%',
+    padding: isMobile ? 0 : 20,
+    paddingTop: isMobile ? (Platform.OS === 'ios' ? 50 : 16) : 20,
+    paddingHorizontal: isMobile ? 0 : 20,
+    minHeight: isMobile ? SCREEN_HEIGHT : 200,
+    position: 'relative',
   },
   closeButton: {
     position: 'absolute',
-    top: 10,
+    top: Platform.OS === 'ios' ? (isMobile ? 50 : 10) : (isMobile ? 16 : 10),
     right: 10,
     width: 32,
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 16,
   },
   closeButtonText: {
     fontSize: 24,
@@ -253,9 +313,11 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    width: '100%',
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: isMobile ? 40 : 20,
+    flexGrow: 1,
   },
   errorContainer: {
     backgroundColor: '#fee2e2',
@@ -268,6 +330,24 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#dc2626',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  errorSubtext: {
+    color: '#991b1b',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  warningContainer: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+  },
+  warningText: {
+    color: '#92400e',
+    fontSize: 12,
   },
 });
 

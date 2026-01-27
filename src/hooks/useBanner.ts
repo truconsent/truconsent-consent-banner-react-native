@@ -28,8 +28,10 @@ export function useBanner(config: FetchBannerConfig | null): UseBannerResult {
 
     try {
       const data = await fetchBanner(config);
+      console.log('Banner loaded successfully:', data);
       setBanner(data);
     } catch (e: any) {
+      console.error('Failed to load banner:', e);
       setError(e.message || 'Failed to load banner');
     } finally {
       setIsLoading(false);

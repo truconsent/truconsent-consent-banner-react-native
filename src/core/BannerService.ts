@@ -39,13 +39,18 @@ export async function fetchBanner(config: FetchBannerConfig): Promise<Banner> {
     throw new Error('Missing organizationId - Organization ID is required for authentication');
   }
 
-  const response = await fetch(`${apiBaseUrl}/${bannerId}`, {
+  const url = `${apiBaseUrl}/${bannerId}`;
+  console.log('Fetching banner from:', url);
+  
+  const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
       'X-API-Key': apiKey,
       'X-Org-Id': organizationId,
     },
   });
+
+  console.log('Banner API response status:', response.status);
 
   if (response.status === 401) {
     throw new Error('Authentication required - Invalid or missing API key');
@@ -54,10 +59,14 @@ export async function fetchBanner(config: FetchBannerConfig): Promise<Banner> {
     throw new Error('Access forbidden - API key does not have permission to access this banner');
   }
   if (!response.ok) {
-    throw new Error('Failed to load banner');
+    const errorText = await response.text().catch(() => 'Unknown error');
+    console.error('Banner API error:', errorText);
+    throw new Error(`Failed to load banner: ${response.status} ${errorText}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log('Banner data received:', JSON.stringify(data, null, 2));
+  return data;
 }
 
 /**

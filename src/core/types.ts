@@ -5,20 +5,23 @@
 export interface Banner {
   banner_id: string;
   collection_point: string;
-  version: string;
+  version?: string;
   title: string;
-  expiry_type: string;
+  name?: string; // Alternative field name from API
+  expiry_type?: string;
   asset?: Asset;
   purposes: Purpose[];
   data_elements?: DataElement[];
   legal_entities?: LegalEntity[];
   tools?: Tool[];
   processing_activities?: ProcessingActivity[];
-  consent_type?: 'standard_consent' | 'cookie_consent';
+  consent_type?: 'standard_consent' | 'cookie_consent' | 'general';
   cookie_config?: CookieConfig;
   banner_settings?: BannerSettings;
   organization?: Organization;
   organization_name?: string;
+  cookie_data_elements?: DataElement[];
+  show_purposes?: boolean;
 }
 
 export interface Purpose {

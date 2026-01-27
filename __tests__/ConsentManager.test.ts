@@ -16,17 +16,17 @@ describe('ConsentManager', () => {
       id: '1',
       name: 'Purpose 1',
       description: 'Description 1',
-      isMandatory: true,
+      is_mandatory: true,
       consented: 'declined',
-      expiryPeriod: '1 year',
+      expiry_period: '1 year',
     },
     {
       id: '2',
       name: 'Purpose 2',
       description: 'Description 2',
-      isMandatory: false,
+      is_mandatory: false,
       consented: 'declined',
-      expiryPeriod: '1 year',
+      expiry_period: '1 year',
     },
   ];
 
@@ -58,9 +58,9 @@ describe('ConsentManager', () => {
           id: '3',
           name: 'Purpose 3',
           description: 'Description 3',
-          isMandatory: false,
+          is_mandatory: false,
           consented: 'accepted',
-          expiryPeriod: '1 year',
+          expiry_period: '1 year',
         },
       ];
       const result = acceptMandatoryPurposes(purposes);
@@ -76,11 +76,11 @@ describe('ConsentManager', () => {
         { ...mockPurposes[0], consented: 'accepted' },
         { ...mockPurposes[1], consented: 'accepted' },
       ];
-      expect(determineConsentAction(purposes)).toBe(ConsentAction.APPROVED);
+      expect(determineConsentAction(purposes)).toBe('approved' as ConsentAction);
     });
 
     it('should return declined when all purposes are declined', () => {
-      expect(determineConsentAction(mockPurposes)).toBe(ConsentAction.DECLINED);
+      expect(determineConsentAction(mockPurposes)).toBe('declined' as ConsentAction);
     });
 
     it('should return partial_consent when mixed', () => {
@@ -88,7 +88,7 @@ describe('ConsentManager', () => {
         { ...mockPurposes[0], consented: 'accepted' },
         { ...mockPurposes[1], consented: 'declined' },
       ];
-      expect(determineConsentAction(purposes)).toBe(ConsentAction.PARTIAL_CONSENT);
+      expect(determineConsentAction(purposes)).toBe('partial_consent' as ConsentAction);
     });
 
     it('should return revoked when previously accepted purpose is declined', () => {
@@ -100,13 +100,11 @@ describe('ConsentManager', () => {
         { ...mockPurposes[0], consented: 'declined' },
         { ...mockPurposes[1], consented: 'accepted' },
       ];
-      expect(determineConsentAction(currentPurposes, previousPurposes)).toBe(
-        ConsentAction.REVOKED
-      );
+      expect(determineConsentAction(currentPurposes, previousPurposes)).toBe('revoked' as ConsentAction);
     });
 
     it('should return declined for empty purposes', () => {
-      expect(determineConsentAction([])).toBe(ConsentAction.DECLINED);
+      expect(determineConsentAction([])).toBe('declined' as ConsentAction);
     });
   });
 
@@ -131,8 +129,8 @@ describe('ConsentManager', () => {
 
     it('should return false when no mandatory purposes', () => {
       const purposes: Purpose[] = [
-        { ...mockPurposes[0], isMandatory: false },
-        { ...mockPurposes[1], isMandatory: false },
+        { ...mockPurposes[0], is_mandatory: false },
+        { ...mockPurposes[1], is_mandatory: false },
       ];
       expect(hasMandatoryPurposes(purposes)).toBe(false);
     });
