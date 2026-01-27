@@ -277,19 +277,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: isMobile ? 16 : 20,
-    paddingTop: isMobile ? 8 : 20,
-    paddingBottom: isMobile ? 8 : 20,
+    paddingHorizontal: isMobile ? 12 : 20,
+    paddingTop: isMobile ? 20 : 28,
+    paddingBottom: isMobile ? 20 : 28,
   },
   container: {
     backgroundColor: 'white',
     borderRadius: 20,
-    width: isMobile ? '100%' : '90%',
-    maxWidth: 600,
-    height: isMobile ? SCREEN_HEIGHT - 16 : undefined, // Use almost full height with minimal top/bottom padding
-    maxHeight: isMobile ? SCREEN_HEIGHT - 16 : '90%',
-    padding: isMobile ? 24 : 24,
-    minHeight: isMobile ? SCREEN_HEIGHT - 16 : 200,
+    width: isMobile ? '96%' : '90%',
+    maxWidth: 720,
+    height: isMobile ? SCREEN_HEIGHT - 80 : undefined,
+    maxHeight: isMobile ? SCREEN_HEIGHT - 80 : SCREEN_HEIGHT * 0.9,
+    padding: isMobile ? 20 : 24,
+    minHeight: isMobile ? SCREEN_HEIGHT * 0.75 : 200,
     position: 'relative',
     // Card popup styling
     shadowColor: '#000',
@@ -300,6 +300,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8, // For Android
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   closeButton: {
     position: 'absolute',
@@ -337,7 +339,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 32,
     flexGrow: 1,
     minHeight: '100%',
   },
