@@ -83,56 +83,63 @@ export default function CookieBannerUI({
 
         <View style={styles.sections}>
           {purposes.length > 0 && (
-            <AccordionSection
-              title="Purposes for Data Collection"
-              count={purposes.length}
-              isExpanded={expandedSections.purposes}
-              onToggle={() => toggleSection('purposes')}
-            >
-              <View style={styles.purposesList}>
-                {purposes.map((p) => (
-                  <View key={p.id} style={styles.purposeItem}>
-                    <Text style={styles.purposeName}>{p.name}</Text>
-                    {p.description && <Text style={styles.purposeDesc}>{p.description}</Text>}
-                  </View>
-                ))}
-              </View>
-            </AccordionSection>
+            <View style={{ marginBottom: 12 }}>
+              <AccordionSection
+                title="Purposes for Data Collection"
+                count={purposes.length}
+                isExpanded={expandedSections.purposes}
+                onToggle={() => toggleSection('purposes')}
+              >
+                <View style={styles.purposesList}>
+                  {purposes.map((p, index) => (
+                    <View key={p.id} style={[styles.purposeItem, index > 0 && { marginTop: 12 }]}>
+                      <Text style={styles.purposeName}>{p.name}</Text>
+                      {p.description && <Text style={styles.purposeDesc}>{p.description}</Text>}
+                    </View>
+                  ))}
+                </View>
+              </AccordionSection>
+            </View>
           )}
 
           {dataElements.length > 0 && (
-            <AccordionSection
-              title="Data Elements Collected"
-              count={dataElements.length}
-              isExpanded={expandedSections.dataElements}
-              onToggle={() => toggleSection('dataElements')}
-            >
-              <View style={styles.pillsContainer}>
-                {dataElements.map((de) => (
-                  <View key={de.id} style={styles.pill}>
-                    <Text style={styles.pillText}>{de.name}</Text>
-                  </View>
-                ))}
-              </View>
-            </AccordionSection>
+            <View style={{ marginBottom: 12 }}>
+              <AccordionSection
+                title="Data Elements Collected"
+                count={dataElements.length}
+                isExpanded={expandedSections.dataElements}
+                onToggle={() => toggleSection('dataElements')}
+              >
+                <View style={styles.pillsContainer}>
+                  {dataElements.map((de, index) => (
+                    <View key={de.id} style={[styles.pill, index > 0 && { marginLeft: 8, marginTop: 8 }]}>
+                      <Text style={styles.pillText}>{de.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              </AccordionSection>
+            </View>
           )}
 
           {processingActivities.length > 0 && (
-            <AccordionSection
-              title="Processing Activities"
-              count={processingActivities.length}
-              isExpanded={expandedSections.activities}
-              onToggle={() => toggleSection('activities')}
-            >
-              <View style={styles.activitiesList}>
-                {processingActivities.map((activity) => (
-                  <View key={activity.id} style={styles.activityItem}>
-                    <View style={styles.activityDot} />
-                    <Text style={styles.activityText}>{activity.name}</Text>
-                  </View>
-                ))}
-              </View>
-            </AccordionSection>
+            <View style={{ marginBottom: 12 }}>
+              <AccordionSection
+                title="Processing Activities"
+                count={processingActivities.length}
+                isExpanded={expandedSections.activities}
+                onToggle={() => toggleSection('activities')}
+              >
+                <View style={styles.activitiesList}>
+                  {processingActivities.map((activity, index) => (
+                    <View key={activity.id} style={[styles.activityItem, index > 0 && { marginTop: 8 }]}>
+                      <View style={styles.activityDot} />
+                      <View style={{ width: 8 }} />
+                      <Text style={styles.activityText}>{activity.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              </AccordionSection>
+            </View>
           )}
         </View>
 
@@ -143,9 +150,11 @@ export default function CookieBannerUI({
           >
             <Text style={styles.buttonText}>Accept All</Text>
           </TouchableOpacity>
+          <View style={{ width: 8 }} />
           <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={onRejectAll}>
             <Text style={styles.secondaryButtonText}>Reject All</Text>
           </TouchableOpacity>
+          <View style={{ width: 8 }} />
           <TouchableOpacity
             style={[styles.button, styles.tertiaryButton]}
             onPress={() => setShowPreferences(true)}
@@ -177,9 +186,12 @@ function AccordionSection({
         <View style={accordionStyles.headerContent}>
           <Text style={accordionStyles.title}>{title}</Text>
           {count !== undefined && (
-            <View style={accordionStyles.badge}>
-              <Text style={accordionStyles.badgeText}>{count}</Text>
-            </View>
+            <>
+              <View style={{ width: 8 }} />
+              <View style={accordionStyles.badge}>
+                <Text style={accordionStyles.badgeText}>{count}</Text>
+              </View>
+            </>
           )}
         </View>
         <Text style={accordionStyles.chevron}>{isExpanded ? '▼' : '▶'}</Text>
@@ -249,7 +261,6 @@ const styles = StyleSheet.create({
   pillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
   },
   pill: {
     borderWidth: 1,
@@ -264,12 +275,10 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   activitiesList: {
-    gap: 8,
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   activityDot: {
     width: 6,
@@ -284,7 +293,6 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
     marginTop: 24,
   },
   button: {
@@ -344,7 +352,6 @@ const accordionStyles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   title: {
     fontSize: 14,

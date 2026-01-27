@@ -55,13 +55,14 @@ export default function BannerUI({
         />
 
         <View style={styles.purposesContainer}>
-          {banner?.purposes?.map((p) => (
-            <ModernPurposeCard
-              key={p.id}
-              purpose={p}
-              banner={banner}
-              onToggle={onChangePurpose}
-            />
+          {banner?.purposes?.map((p, index) => (
+            <View key={p.id} style={index > 0 && { marginTop: 16 }}>
+              <ModernPurposeCard
+                purpose={p}
+                banner={banner}
+                onToggle={onChangePurpose}
+              />
+            </View>
           ))}
         </View>
 

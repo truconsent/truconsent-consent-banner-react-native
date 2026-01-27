@@ -8,7 +8,18 @@ This document tracks all issues, bugs, and findings discovered during SDK testin
 - [ ] _No critical issues found yet_
 
 ### High Priority Issues
-- [ ] _No high priority issues found yet_
+- [x] **StyleSheet gap property compatibility** - Fixed
+  - **Issue**: React Native StyleSheet `gap` property is only available in RN 0.71+, but package.json requires >=0.70.0
+  - **Impact**: Components would fail to render on RN 0.70.x
+  - **Fix**: Replaced all `gap` properties with margin-based spacing (marginLeft, marginTop)
+  - **Files affected**: 
+    - ModernBannerHeader.tsx
+    - ModernPurposeCard.tsx
+    - ModernBannerActions.tsx
+    - CookieBannerUI.tsx
+    - CollapsibleDataSection.tsx
+    - BannerUI.tsx
+  - **Status**: Fixed
 
 ### Medium Priority Issues
 - [ ] _No medium priority issues found yet_
@@ -17,7 +28,8 @@ This document tracks all issues, bugs, and findings discovered during SDK testin
 - [ ] _No low priority issues found yet_
 
 ### Integration Challenges
-- [ ] _No integration challenges found yet_
+- [ ] **Example app setup** - Need to verify local package linking works correctly
+- [ ] **Test dependencies** - Need to add @testing-library/react-native for component tests
 
 ### Performance Issues
 - [ ] _No performance issues found yet_

@@ -130,8 +130,8 @@ export default function ModernPurposeCard({
                     {t('tools')} ({tools.length})
                   </Text>
                   <View style={styles.pillsContainer}>
-                    {tools.map((item) => (
-                      <View key={item.id} style={styles.pill}>
+                    {tools.map((item, index) => (
+                      <View key={item.id} style={[styles.pill, index > 0 && { marginLeft: 8, marginTop: 8 }]}>
                         <Text style={styles.pillText}>
                           {translateDynamic(item.name, i18n.language)}
                         </Text>

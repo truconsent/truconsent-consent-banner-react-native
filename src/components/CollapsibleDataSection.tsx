@@ -61,8 +61,8 @@ export default function CollapsibleDataSection({
       </TouchableOpacity>
       {isOpen && (
         <View style={styles.content}>
-          {items.map((item) => (
-            <View key={item.id} style={styles.pill}>
+          {items.map((item, index) => (
+            <View key={item.id} style={[styles.pill, index > 0 && { marginLeft: 8, marginTop: 8 }]}>
               <Text style={styles.pillText}>{translateDynamic(item.name, i18n.language)}</Text>
             </View>
           ))}
@@ -97,7 +97,6 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
   },
   pill: {
     backgroundColor: '#fff',
