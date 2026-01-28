@@ -2,6 +2,8 @@
  * TruConsent React Native SDK - Main entry point
  */
 export { default as TruConsentModal } from './components/TruConsentModal';
+export { default as TruConsent } from './components/TruConsent';
+export { default as RightCenter } from './components/RightCenter';
 export { default as BannerUI } from './components/BannerUI';
 export { default as CookieBannerUI } from './components/CookieBannerUI';
 
