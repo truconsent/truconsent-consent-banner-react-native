@@ -16,7 +16,7 @@ export interface RightCenterProps {
 
 export default function RightCenter({
   userId,
-  clientId = 'MARS_MONEY_CLIENT_001',
+  clientId = 'mars-money',
   supabaseProjectUrl = 'https://iwjwpfuaygfojwrrstly.supabase.co',
 }: RightCenterProps) {
   const uri = useMemo(() => {
@@ -31,7 +31,7 @@ export default function RightCenter({
     <View style={styles.container}>
       <WebView
         source={{ uri }}
-        startInLoadingState
+        startInLoadingState={true}
         renderLoading={() => (
           <View style={styles.loading}>
             <ActivityIndicator size="large" />

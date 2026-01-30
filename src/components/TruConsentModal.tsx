@@ -122,6 +122,19 @@ export default function TruConsentModal(props: TruConsentConfig) {
     };
   }, [banner]);
 
+  // Debug logging - MUST be before any conditional returns
+  useEffect(() => {
+    if (banner) {
+      console.log('Banner loaded in modal:', {
+        bannerId: banner.banner_id,
+        title: banner.title || banner.name,
+        purposesCount: banner.purposes?.length || 0,
+        consentType: banner.consent_type,
+        hasSettings: !!banner.banner_settings,
+      });
+    }
+  }, [banner]);
+
   const handleAction = async (action: ConsentAction) => {
     if (!banner) return;
     setActionLoading(true);
@@ -163,22 +176,10 @@ export default function TruConsentModal(props: TruConsentConfig) {
     close('no_action');
   };
 
+  // Conditional return - must be AFTER all hooks
   if (!visible) return null;
 
   const displayError = error || bannerError;
-
-  // Debug logging
-  useEffect(() => {
-    if (banner) {
-      console.log('Banner loaded in modal:', {
-        bannerId: banner.banner_id,
-        title: banner.title || banner.name,
-        purposesCount: banner.purposes?.length || 0,
-        consentType: banner.consent_type,
-        hasSettings: !!banner.banner_settings,
-      });
-    }
-  }, [banner]);
 
   return (
     <I18nextProvider i18n={i18n}>
