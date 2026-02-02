@@ -76,11 +76,15 @@ export default function NativeRightCenter({
   const [ticketsLoading, setTicketsLoading] = useState(true);
   const [ticketsError, setTicketsError] = useState<string | null>(null);
   const [showGrievanceForm, setShowGrievanceForm] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [grievanceForm, setGrievanceForm] = useState({
     subject: '',
     category: '',
     description: '',
   });
+  
+  // Nominee dropdown state
+  const [showRelationshipDropdown, setShowRelationshipDropdown] = useState(false);
 
   // Fetch consents - matches web package logic exactly
   const fetchUserConsents = async () => {
@@ -523,6 +527,8 @@ export default function NativeRightCenter({
             onEdit={() => setEditing(true)}
             onCancel={() => setEditing(false)}
             onDelete={handleDeleteNominee}
+            showRelationshipDropdown={showRelationshipDropdown}
+            onToggleRelationshipDropdown={() => setShowRelationshipDropdown(!showRelationshipDropdown)}
           />
         )}
 
@@ -536,6 +542,8 @@ export default function NativeRightCenter({
             onFormChange={setGrievanceForm}
             onSubmit={handleGrievanceSubmit}
             onToggleForm={() => setShowGrievanceForm(!showGrievanceForm)}
+            showCategoryDropdown={showCategoryDropdown}
+            onToggleCategoryDropdown={() => setShowCategoryDropdown(!showCategoryDropdown)}
           />
         )}
       </ScrollView>
@@ -592,6 +600,70 @@ export default function NativeRightCenter({
   );
 }
 
+// Reusable Select Dropdown Component
+interface SelectDropdownProps {
+  label: string;
+  placeholder: string;
+  value: string;
+  options: { label: string; value: string }[];
+  onSelect: (value: string) => void;
+  visible: boolean;
+  onToggle: () => void;
+}
+
+function SelectDropdown({ label, placeholder, value, options, onSelect, visible, onToggle }: SelectDropdownProps) {
+  return (
+    <View style={styles.selectContainer}>
+      <Text style={styles.selectLabel}>{label}</Text>
+      <TouchableOpacity style={styles.selectInput} onPress={onToggle}>
+        <Text style={[styles.selectInputText, !value && styles.selectInputPlaceholder]}>
+          {value || placeholder}
+        </Text>
+        <Text style={styles.selectArrow}>▼</Text>
+      </TouchableOpacity>
+      
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={onToggle}
+      >
+        <TouchableOpacity
+          style={styles.dropdownOverlay}
+          activeOpacity={1}
+          onPress={onToggle}
+        >
+          <View style={styles.dropdownContainer}>
+            {options.map((option, index) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.dropdownOption,
+                  value === option.value && styles.dropdownOptionSelected,
+                  index === options.length - 1 && styles.dropdownOptionLast,
+                ]}
+                onPress={() => {
+                  onSelect(option.value);
+                  onToggle();
+                }}
+              >
+                <Text
+                  style={[
+                    styles.dropdownOptionText,
+                    value === option.value && styles.dropdownOptionTextSelected,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+}
+
 // Tab Components (to be implemented in next steps)
 function ConsentTab({ consentGroups, consentsLoading, dirty, onToggle, onSave, onInfoClick }: any) {
   if (consentsLoading) {
@@ -606,7 +678,9 @@ function ConsentTab({ consentGroups, consentsLoading, dirty, onToggle, onSave, o
   return (
     <View style={styles.tabContent}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Manage your Consents here!</Text>
+        <View style={styles.sectionTitleContainer}>
+          <Text style={styles.sectionTitle}>Manage your Consents here!</Text>
+        </View>
         {dirty && (
           <TouchableOpacity style={styles.saveButton} onPress={onSave}>
             <Text style={styles.saveButtonText}>Save Changes</Text>
@@ -773,7 +847,7 @@ function DPOTab({ dpoInfo, loading, error }: any) {
   );
 }
 
-function NomineeTab({ nominee, editing, nomineeForm, loading, error, onFormChange, onSubmit, onEdit, onCancel, onDelete }: any) {
+function NomineeTab({ nominee, editing, nomineeForm, loading, error, onFormChange, onSubmit, onEdit, onCancel, onDelete, showRelationshipDropdown, onToggleRelationshipDropdown }: any) {
   if (loading) {
     return (
       <View style={styles.centerContent}>
@@ -843,16 +917,21 @@ function NomineeTab({ nominee, editing, nomineeForm, loading, error, onFormChang
             value={nomineeForm.nominee_name}
             onChangeText={(text) => onFormChange({ ...nomineeForm, nominee_name: text })}
           />
-          <View style={styles.selectContainer}>
-            <Text style={styles.selectLabel}>Relationship *</Text>
-            {/* Simplified - in real app use Picker or similar */}
-            <TextInput
-              style={styles.input}
-              placeholder="Select relationship"
-              value={nomineeForm.relationship}
-              onChangeText={(text) => onFormChange({ ...nomineeForm, relationship: text })}
-            />
-          </View>
+          <SelectDropdown
+            label="Relationship *"
+            placeholder="Select relationship"
+            value={nomineeForm.relationship}
+            options={[
+              { label: 'Spouse', value: 'Spouse' },
+              { label: 'Parent', value: 'Parent' },
+              { label: 'Child', value: 'Child' },
+              { label: 'Sibling', value: 'Sibling' },
+              { label: 'Other', value: 'Other' },
+            ]}
+            onSelect={(value) => onFormChange({ ...nomineeForm, relationship: value })}
+            visible={showRelationshipDropdown}
+            onToggle={onToggleRelationshipDropdown}
+          />
           <TextInput
             style={styles.input}
             placeholder="Email *"
@@ -893,7 +972,7 @@ function NomineeTab({ nominee, editing, nomineeForm, loading, error, onFormChang
   );
 }
 
-function GrievanceTab({ tickets, loading, error, showForm, form, onFormChange, onSubmit, onToggleForm }: any) {
+function GrievanceTab({ tickets, loading, error, showForm, form, onFormChange, onSubmit, onToggleForm, showCategoryDropdown, onToggleCategoryDropdown }: any) {
   if (loading) {
     return (
       <View style={styles.centerContent}>
@@ -914,7 +993,7 @@ function GrievanceTab({ tickets, loading, error, showForm, form, onFormChange, o
   return (
     <View>
       <View style={styles.sectionHeader}>
-        <View>
+        <View style={styles.sectionTitleContainer}>
           <Text style={styles.sectionTitle}>Grievance Tickets</Text>
           <Text style={styles.sectionSubtitle}>Submit privacy concerns or view your existing tickets</Text>
         </View>
@@ -931,15 +1010,19 @@ function GrievanceTab({ tickets, loading, error, showForm, form, onFormChange, o
             value={form.subject}
             onChangeText={(text) => onFormChange({ ...form, subject: text })}
           />
-          <View style={styles.selectContainer}>
-            <Text style={styles.selectLabel}>Category *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Select category"
-              value={form.category}
-              onChangeText={(text) => onFormChange({ ...form, category: text })}
-            />
-          </View>
+          <SelectDropdown
+            label="Category *"
+            placeholder="Select category"
+            value={form.category}
+            options={[
+              { label: 'Privacy Concern', value: 'Privacy Concern' },
+              { label: 'Data Access', value: 'Data Access' },
+              { label: 'Other', value: 'Other' },
+            ]}
+            onSelect={(value) => onFormChange({ ...form, category: value })}
+            visible={showCategoryDropdown}
+            onToggle={onToggleCategoryDropdown}
+          />
           <TextInput
             style={[styles.input, styles.textarea]}
             placeholder="Description *"
@@ -1044,6 +1127,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  sectionTitleContainer: {
+    flex: 1,
+    minWidth: 200,
   },
   sectionTitle: {
     fontSize: 20,
@@ -1158,8 +1247,10 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: '#9333ea',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 6,
+    minWidth: 120,
+    alignItems: 'center',
   },
   saveButtonText: {
     color: '#ffffff',
@@ -1182,6 +1273,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 6,
+    minWidth: 140,
+    alignItems: 'center',
   },
   primaryButtonText: {
     color: '#ffffff',
@@ -1283,6 +1376,68 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#1e293b',
     marginBottom: 8,
+  },
+  selectInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 44,
+  },
+  selectInputText: {
+    fontSize: 14,
+    color: '#1e293b',
+    flex: 1,
+  },
+  selectInputPlaceholder: {
+    color: '#94a3b8',
+  },
+  selectArrow: {
+    fontSize: 12,
+    color: '#64748b',
+    marginLeft: 8,
+  },
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    minWidth: 280,
+    maxWidth: '90%',
+    maxHeight: '60%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  dropdownOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  dropdownOptionLast: {
+    borderBottomWidth: 0,
+  },
+  dropdownOptionSelected: {
+    backgroundColor: '#f3e8ff',
+  },
+  dropdownOptionText: {
+    fontSize: 16,
+    color: '#1e293b',
+  },
+  dropdownOptionTextSelected: {
+    color: '#9333ea',
+    fontWeight: '600',
   },
   formActions: {
     marginTop: 16,

@@ -232,8 +232,11 @@ class RightsCenterApi {
           }
           return response as ConsentGroup;
         } catch (err: any) {
-          // If a specific collection point doesn't exist, skip it
-          console.warn(`[RightsCenterApi] Collection point ${cpId} not found, skipping`);
+          // If a specific collection point doesn't exist or fails, skip it silently
+          // Don't log as error since some collection points may not exist
+          if (!err.message || !err.message.includes('404')) {
+            console.warn(`[RightsCenterApi] Collection point ${cpId} fetch failed, skipping:`, err.message?.substring(0, 100));
+          }
           return null;
         }
       })
