@@ -32,7 +32,9 @@ The TruConsent React Native SDK is a comprehensive solution for displaying and m
 - **TypeScript Support**: Full TypeScript definitions for type safety
 - **Customizable UI**: Modern, mobile-friendly interface with customizable branding
 - **Consent Tracking**: Automatic logging of consent actions to the TruConsent API
+- **Rights Center**: Comprehensive rights management interface (RightCenter component) with WebView integration
 - **Error Handling**: Comprehensive error handling with user-friendly messages
+- **React Hooks**: Custom hooks (useBanner, useConsent) for flexible integration
 
 ### Supported Platforms
 
@@ -1443,4 +1445,5 @@ For issues, questions, or contributions, please refer to the project repository 
 
 **Version:** 0.1.0  
 **Last Updated:** January 2026
+
 
