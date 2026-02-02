@@ -343,7 +343,11 @@ export default function NativeRightCenter({
 
       setDirty(false);
       setShowSaveModal(true);
-      await fetchUserConsents();
+      // Refresh consents after save - errors are handled gracefully in fetchUserConsents
+      fetchUserConsents().catch((err) => {
+        // Silently handle refresh errors - save was successful
+        console.log('[NativeRightCenter] Note: Error refreshing consents after save (this is non-critical):', err);
+      });
     } catch (error: any) {
       console.error('[NativeRightCenter] Error saving consents:', error);
       Alert.alert('Error', 'Failed to save consent changes. Please try again.');

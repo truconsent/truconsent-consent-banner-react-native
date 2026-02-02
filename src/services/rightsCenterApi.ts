@@ -185,14 +185,16 @@ class RightsCenterApi {
       if (Array.isArray(result) && result.length > 0) {
         console.log('[RightsCenterApi] getAllBanners - Sample banner:', JSON.stringify(result[0], null, 2).substring(0, 200));
       }
-      return result;
-    } catch (error: any) {
-      // If 404, fetch all collection points individually by their IDs
-      if (error.message && error.message.includes('404')) {
-        console.warn('[RightsCenterApi] Root endpoint (/) returned 404. Fetching all collection points individually...');
+      // If root endpoint returned empty array (404 handled), fetch individually
+      if (Array.isArray(result) && result.length === 0) {
+        console.log('[RightsCenterApi] Root endpoint returned empty, fetching all collection points individually...');
         return await this.fetchAllCollectionPointsByID();
       }
-      throw error;
+      return result;
+    } catch (error: any) {
+      // If any other error, try fetching individually
+      console.warn('[RightsCenterApi] Error fetching from root endpoint, fetching all collection points individually...');
+      return await this.fetchAllCollectionPointsByID();
     }
   }
 
