@@ -1,13 +1,13 @@
-# @truconsent/consent-banner-react-native
+# @truconsent/consent-notice-react-native
 
 React Native SDK for TruConsent consent banner. This package provides native mobile UI components for displaying and managing consent banners in React Native applications.
 
 ## Installation
 
 ```bash
-npm install @truconsent/consent-banner-react-native
+npm install @truconsent/consent-notice-react-native
 # or
-yarn add @truconsent/consent-banner-react-native
+yarn add @truconsent/consent-notice-react-native
 ```
 
 ## Peer Dependencies
@@ -22,7 +22,7 @@ This package requires the following peer dependencies:
 ## Usage
 
 ```tsx
-import { TruConsentModal } from '@truconsent/consent-banner-react-native';
+import { TruConsentModal } from '@truconsent/consent-notice-react-native';
 
 function App() {
   return (
