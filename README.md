@@ -2,6 +2,19 @@
 
 React Native SDK for TruConsent consent banner. This package provides native mobile UI components for displaying and managing consent banners in React Native applications.
 
+## 📚 Documentation
+
+**👉 [Complete Integration Guide](INTEGRATION_GUIDE.md)** - Step-by-step guide with real-world examples from the Mars Money React Native app.
+
+The integration guide includes:
+- Detailed installation instructions
+- Configuration setup (Expo & React Native CLI)
+- Consent Modal integration with hook consistency patterns
+- Rights Center implementation
+- Complete code examples
+- Troubleshooting guide (including React Native-specific issues)
+- Best practices
+
 ## Installation
 
 ```bash
