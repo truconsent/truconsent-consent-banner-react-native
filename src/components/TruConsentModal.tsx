@@ -1,7 +1,7 @@
 /**
  * TruConsentModal - Main React Native component for displaying consent banner
  */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Modal,
   View,
@@ -22,6 +22,8 @@ import { submitConsent } from '../core/BannerService';
 import { generateRequestId } from '../utils/RequestIdGenerator';
 import BannerUI from './BannerUI';
 import CookieBannerUI from './CookieBannerUI';
+import ModernBannerHeader from './ModernBannerHeader';
+import ModernBannerFooter from './ModernBannerFooter';
 
 export default function TruConsentModal(props: TruConsentConfig) {
   const {
@@ -29,11 +31,16 @@ export default function TruConsentModal(props: TruConsentConfig) {
     organizationId,
     bannerId,
     userId,
-    apiBaseUrl = 'https://rdwcymn5poo6zbzg5fa5xzjsqy0zzcpm.lambda-url.ap-south-1.on.aws/banners',
+    apiUrl,
+    assetId,
+    token,
+    authToken,
     logoUrl,
     companyName = 'Mars Company',
     onClose,
   } = props;
+
+  const apiKeyValue = apiKey ?? '';
 
   const [visible, setVisible] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -44,8 +51,17 @@ export default function TruConsentModal(props: TruConsentConfig) {
   const closeButtonClickedRef = useRef(false);
   const [requestId] = useState(() => generateRequestId());
 
-  const bannerConfig = bannerId && apiKey && organizationId
-    ? { bannerId, apiKey, organizationId, apiBaseUrl }
+  const bannerConfig = bannerId && apiKeyValue && organizationId && apiUrl
+    ? {
+        bannerId,
+        apiKey: apiKeyValue,
+        organizationId,
+        apiUrl,
+        assetId,
+        userId,
+        token,
+        authToken,
+      }
     : null;
 
   const { banner, isLoading, error: bannerError } = useBanner(bannerConfig);
@@ -61,27 +77,96 @@ export default function TruConsentModal(props: TruConsentConfig) {
     });
   }, [isLoading, banner, bannerError, bannerId]);
 
-  const { purposes, updatePurpose, acceptAll, rejectAll, acceptSelected, setPurposes } =
-    useConsent(banner?.purposes || []);
+  const defaultSelection = (banner?.banner_settings as any)?.default_selection ?? 'mandatory_only';
+
+  const isNoticePurpose = (p: any) => {
+    const isLegitimate =
+      Boolean(p?.is_legitimate ?? p?.isLegitimate) ||
+      String(p?.purpose_type ?? p?.purposeType ?? '').toLowerCase().includes('legitimate');
+    return isLegitimate;
+  };
+
+  const normalizedPurposes = React.useMemo(() => {
+    const rawPurposes: any[] = Array.isArray(banner?.purposes) ? (banner?.purposes as any[]) : [];
+    return rawPurposes.map((p) => {
+      const notice = isNoticePurpose(p);
+      const isMandatory = Boolean(p?.is_mandatory);
+
+      const checked =
+        notice || isMandatory
+          ? 'accepted'
+          : defaultSelection === 'all'
+          ? 'accepted'
+          : defaultSelection === 'none'
+          ? 'declined'
+          : // mandatory_only
+            'declined';
+
+      return {
+        ...p,
+        consented: checked,
+      } as Purpose;
+    });
+  }, [banner?.purposes, defaultSelection]);
+
+  // Memoize filtered arrays to avoid creating new references on every render.
+  // This prevents the sync effect below from re-triggering infinitely.
+  const noticePurposes = useMemo(
+    () => normalizedPurposes.filter((p) => isNoticePurpose(p)),
+    [normalizedPurposes]
+  );
+  const consentPurposes = useMemo(
+    () => normalizedPurposes.filter((p) => !isNoticePurpose(p)),
+    [normalizedPurposes]
+  );
+
+  const { purposes, updatePurpose, setPurposes } = useConsent(consentPurposes);
+  const syncedPurposesKeyRef = useRef('');
 
   // Update purposes when banner loads
   useEffect(() => {
-    if (banner?.purposes) {
-      setPurposes(banner.purposes);
+    // Guard against repeated state writes when payload has not changed.
+    const syncKey = JSON.stringify(
+      consentPurposes.map((p) => ({
+        id: p.id,
+        consented: p.consented,
+        is_mandatory: p.is_mandatory,
+      }))
+    );
+
+    if (syncedPurposesKeyRef.current !== syncKey) {
+      syncedPurposesKeyRef.current = syncKey;
+      setPurposes(consentPurposes);
     }
-  }, [banner?.purposes, setPurposes]);
+  }, [consentPurposes, setPurposes]);
 
   // Derive company / logo from banner.organization when available
   const resolvedCompanyName =
     (banner && (banner.organization_name || banner.organization?.name)) || companyName;
   const resolvedLogoUrl = (banner && banner.organization?.logo_url) || logoUrl;
 
+  const templateKey = (banner?.banner_settings as any)?.general_notice_template || 'center_modal';
+
   const close = (type: ConsentAction) => {
     setVisible(false);
     if (onClose) onClose(type);
   };
 
-  const sendLogEvent = async (action: ConsentAction, purposesToSend?: Purpose[]) => {
+  const noticePurposesPayload: Purpose[] = noticePurposes.map((p) => ({
+    ...p,
+    consented: 'accepted',
+  }));
+
+  const buildAllPurposesPayload = (consentPurposesPayload: Purpose[]) => [
+    ...noticePurposesPayload,
+    ...consentPurposesPayload,
+  ];
+
+  const submitPurposes = async (
+    action: ConsentAction,
+    purposesPayload: Purpose[],
+    metadata?: Record<string, any>
+  ) => {
     if (!banner || actionRunningRef.current) return;
 
     if (action !== 'no_action') {
@@ -93,12 +178,14 @@ export default function TruConsentModal(props: TruConsentConfig) {
       await submitConsent({
         collectionPointId: banner.collection_point,
         userId,
-        purposes: purposesToSend || purposes,
+        purposes: purposesPayload,
         action,
-        apiKey,
+        apiKey: apiKeyValue,
         organizationId,
         requestId,
-        apiBaseUrl,
+        apiUrl,
+        assetId,
+        metadata,
       });
     } catch (e: any) {
       console.error('Failed to log consent event:', e);
@@ -106,6 +193,31 @@ export default function TruConsentModal(props: TruConsentConfig) {
     } finally {
       actionRunningRef.current = false;
     }
+  };
+
+  const sendNoticeShown = async (buttonUsed: string) => {
+    if (!noticePurposesPayload.length) return;
+
+    await submitPurposes('notice_shown', noticePurposesPayload, {
+      button_used: buttonUsed,
+      event_type: 'notice_shown',
+      collection_point_version: banner?.version ?? 1,
+    });
+  };
+
+  const sendConsentAction = async (
+    action: ConsentAction,
+    consentPurposesPayload: Purpose[],
+    buttonUsed?: string
+  ) => {
+    const metadata = buttonUsed
+      ? {
+          button_used: buttonUsed,
+          collection_point_version: banner?.version ?? 1,
+        }
+      : undefined;
+
+    await submitPurposes(action, buildAllPurposesPayload(consentPurposesPayload), metadata);
   };
 
   // Cleanup effect to record "no_action" ONLY if close button was clicked
@@ -117,7 +229,7 @@ export default function TruConsentModal(props: TruConsentConfig) {
         banner &&
         !actionRunningRef.current
       ) {
-        sendLogEvent('no_action');
+        void submitPurposes('no_action', buildAllPurposesPayload(purposes));
       }
     };
   }, [banner]);
@@ -135,14 +247,37 @@ export default function TruConsentModal(props: TruConsentConfig) {
     }
   }, [banner]);
 
-  const handleAction = async (action: ConsentAction) => {
+  const handleRejectAll = async () => {
     if (!banner) return;
     setActionLoading(true);
     setError(null);
 
     try {
-      await sendLogEvent(action);
-      close(action);
+      const consentPayload: Purpose[] = purposes.map((p) => ({ ...p, consented: 'declined' }));
+      const buttonUsed = 'reject_all';
+
+      await sendNoticeShown(buttonUsed);
+      await sendConsentAction('declined', consentPayload, buttonUsed);
+      close('declined');
+    } catch (e: any) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConsentAll = async () => {
+    if (!banner) return;
+    setActionLoading(true);
+    setError(null);
+
+    try {
+      const consentPayload: Purpose[] = purposes.map((p) => ({ ...p, consented: 'accepted' }));
+      const buttonUsed = 'accept_all';
+
+      await sendNoticeShown(buttonUsed);
+      await sendConsentAction('approved', consentPayload, buttonUsed);
+      close('approved');
     } catch (e: any) {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -156,9 +291,48 @@ export default function TruConsentModal(props: TruConsentConfig) {
     setError(null);
 
     try {
-      const updatedPurposes = acceptSelected();
-      await sendLogEvent('approved', updatedPurposes);
-      close('approved');
+      // Match web semantics: mandatory purposes are accepted; optional keep the user's selection.
+      const consentPayload: Purpose[] = purposes.map((p) =>
+        p.is_mandatory ? { ...p, consented: 'accepted' } : p
+      );
+
+      const anyOptionalAccepted = consentPayload.some(
+        (p) => !p.is_mandatory && p.consented === 'accepted'
+      );
+
+      const buttonUsed = anyOptionalAccepted ? 'save_preferences' : 'only_necessary';
+
+      const allAccepted = consentPayload.every((p) => p.consented === 'accepted');
+      const allDeclined = consentPayload.every((p) => p.consented === 'declined');
+
+      const consentAction: ConsentAction =
+        consentPayload.length === 0
+          ? 'no_action'
+          : allAccepted
+          ? 'approved'
+          : allDeclined
+          ? 'declined'
+          : 'partial_consent';
+
+      await sendNoticeShown(buttonUsed);
+      await sendConsentAction(consentAction, consentPayload, buttonUsed);
+      close(consentAction);
+    } catch (e: any) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAcknowledgeNotice = async () => {
+    if (!banner) return;
+    setActionLoading(true);
+    setError(null);
+
+    try {
+      const buttonUsed = 'i_understand';
+      await sendNoticeShown(buttonUsed);
+      close('notice_shown');
     } catch (e: any) {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -170,7 +344,7 @@ export default function TruConsentModal(props: TruConsentConfig) {
     closeButtonClickedRef.current = true;
 
     if (!actionTakenRef.current) {
-      sendLogEvent('no_action');
+      void submitPurposes('no_action', buildAllPurposesPayload(purposes));
       actionTakenRef.current = true;
     }
     close('no_action');
@@ -232,13 +406,68 @@ export default function TruConsentModal(props: TruConsentConfig) {
 
                 {!displayError && banner && (
                   <>
-                    {banner.consent_type === 'cookie_consent' ? (
+                    {templateKey === 'notice_only' && banner.consent_type !== 'cookie_consent' ? (
+                      <View>
+                        {noticePurposesPayload.length > 0 ? (
+                          <>
+                            <ModernBannerHeader
+                              logoUrl={(banner?.banner_settings as any)?.logo_url || resolvedLogoUrl}
+                              orgName={resolvedCompanyName}
+                              bannerTitle={(banner?.banner_settings as any)?.banner_title}
+                              disclaimerText={(banner?.banner_settings as any)?.disclaimer_text}
+                            />
+
+                            <View style={{ paddingHorizontal: 24, paddingTop: 4 }}>
+                              {noticePurposesPayload.map((p) => (
+                                <View key={p.id} style={styles.noticePurposeCard}>
+                                  <Text style={styles.noticePurposeTitle}>{p.name}</Text>
+                                  {p.description ? (
+                                    <Text style={styles.noticePurposeDescription}>{p.description}</Text>
+                                  ) : null}
+                                </View>
+                              ))}
+                            </View>
+
+                            <View style={{ marginTop: 16 }}>
+                              <ModernBannerFooter
+                                footerText={
+                                  (banner?.banner_settings as any)?.footer_text ||
+                                  'Review our [Privacy Policy] and [Transparency Centre], [DPO Details]. Use the [Rights Centre] anytime to withdraw consent, delete data, name a nominee, or raise a grievance.'
+                                }
+                                orgName={resolvedCompanyName}
+                              />
+
+                              <TouchableOpacity
+                                style={[
+                                  styles.noticeAcknowledgeButton,
+                                  { opacity: actionLoading ? 0.7 : 1 },
+                                ]}
+                                onPress={handleAcknowledgeNotice}
+                                disabled={actionLoading}
+                              >
+                                {actionLoading ? (
+                                  <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                  <Text style={styles.noticeAcknowledgeButtonText}>
+                                    {(banner?.banner_settings as any)?.action_button_text || 'I Understand'}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            </View>
+                          </>
+                        ) : (
+                          <View style={styles.errorContainer}>
+                            <Text style={styles.errorText}>No notice content available</Text>
+                          </View>
+                        )}
+                      </View>
+                    ) : banner.consent_type === 'cookie_consent' ? (
                       <CookieBannerUI
                         banner={banner}
                         companyName={resolvedCompanyName}
                         logoUrl={resolvedLogoUrl}
-                        onRejectAll={() => handleAction('declined')}
-                        onConsentAll={() => handleAction('approved')}
+                        onRejectAll={handleRejectAll}
+                        onConsentAll={handleConsentAll}
                       />
                     ) : (
                       <BannerUI
@@ -246,8 +475,8 @@ export default function TruConsentModal(props: TruConsentConfig) {
                         companyName={resolvedCompanyName}
                         logoUrl={resolvedLogoUrl}
                         onChangePurpose={updatePurpose}
-                        onRejectAll={() => handleAction('declined')}
-                        onConsentAll={() => handleAction('approved')}
+                        onRejectAll={handleRejectAll}
+                        onConsentAll={handleConsentAll}
                         onAcceptSelected={handleAcceptSelected}
                       />
                     )}
@@ -373,6 +602,37 @@ const styles = StyleSheet.create({
   warningText: {
     color: '#92400e',
     fontSize: 12,
+  },
+  noticePurposeCard: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#fff',
+    marginBottom: 12,
+  },
+  noticePurposeTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  noticePurposeDescription: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  noticeAcknowledgeButton: {
+    marginHorizontal: 24,
+    marginBottom: 24,
+    borderRadius: 10,
+    backgroundColor: '#7030bc',
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  noticeAcknowledgeButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

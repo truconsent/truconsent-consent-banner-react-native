@@ -14,6 +14,7 @@ export * from './core/ConsentManager';
 export * from './hooks/useBanner';
 export * from './hooks/useConsent';
 export * from './utils/RequestIdGenerator';
+export * from './utils/ColorUtils';
 
 // Default export
 export { default } from './components/TruConsentModal';

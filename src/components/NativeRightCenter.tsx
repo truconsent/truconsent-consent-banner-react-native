@@ -2,7 +2,7 @@
  * NativeRightCenter - Native implementation of Rights Center
  * Replaces WebView with native React Native components
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,32 +14,109 @@ import {
   TextInput,
   Switch,
   Alert,
+  Linking,
 } from 'react-native';
 import RightsCenterApi, {
   ConsentGroup,
+  Purpose,
   DPOInfo,
   Nominee,
   GrievanceTicket,
   ConsentPayload,
 } from '../services/rightsCenterApi';
+import { deriveThemeColors } from '../utils/ColorUtils';
 
 export interface NativeRightCenterProps {
   userId: string;
   apiKey?: string;
   organizationId?: string;
-  apiBaseUrl?: string;
+  /**
+   * Web SDK parity: full API base (e.g. includes `/api/v1` routes).
+   * Optional for now; used when implementing full parity.
+   */
+  apiUrl?: string;
+  /** Web SDK parity */
+  assetId?: string;
+  /** Web SDK parity: token-based auth. */
+  token?: string;
+  authToken?: string;
 }
 
-const tabs = ['Consent', 'Rights', 'Transparency', 'DPO', 'Nominee', 'Grievance'];
+const DEFAULT_RIGHTS_CENTER_SETTINGS: Partial<import('../services/rightsCenterApi').RightsCenterSettings> = {
+  background_color: '#020617',
+  primary_text_color: '#e5e7eb',
+  secondary_text_color: '#9ca3af',
+  button_color: '#65a30d',
+  button_text_color: '#0b1120',
+  font_family: 'sans-serif',
+
+  show_consents_section: true,
+  show_rights_section: true,
+  show_nominees_section: true,
+  show_transparency_section: false,
+  show_dpo_section: false,
+  show_grievance_section: true,
+
+  grievance_mode: 'truconsent',
+  grievance_external_url: '',
+
+  consents_section_title: 'Consents',
+  rights_section_title: 'Your Data Rights',
+  nominees_section_title: 'Nominees',
+  transparency_description: '',
+
+  dpo_qualifications_enabled: true,
+  dpo_responsibilities_enabled: true,
+  dpo_working_hours_enabled: true,
+  dpo_response_time_enabled: true,
+};
 
 export default function NativeRightCenter({
   userId,
   apiKey = '',
   organizationId = 'mars-money',
-  apiBaseUrl = 'https://rdwcymn5poo6zbzg5fa5xzjsqy0zzcpm.lambda-url.ap-south-1.on.aws/banners',
+  apiUrl,
+  assetId,
 }: NativeRightCenterProps) {
+  const [rightsCenterSettings, setRightsCenterSettings] = useState(
+    DEFAULT_RIGHTS_CENTER_SETTINGS as any
+  );
+  const [isInitializing, setIsInitializing] = useState(true);
+
   const [activeTab, setActiveTab] = useState('Consent');
-  const [api] = useState(() => new RightsCenterApi(apiBaseUrl, apiKey, organizationId));
+
+  const [api] = useState(
+    () => new RightsCenterApi(apiUrl ?? '', apiKey, organizationId, userId)
+  );
+
+  const theme = useMemo(
+    () => deriveThemeColors({
+      background_color: rightsCenterSettings.background_color,
+      primary_text_color: rightsCenterSettings.primary_text_color,
+      secondary_text_color: rightsCenterSettings.secondary_text_color,
+      button_color: rightsCenterSettings.button_color,
+      button_text_color: rightsCenterSettings.button_text_color,
+    }),
+    [rightsCenterSettings]
+  );
+
+  const tabs = useMemo(() => {
+    const tabConfig = [
+      { label: 'Consent', enabled: rightsCenterSettings.show_consents_section !== false },
+      { label: 'Rights', enabled: rightsCenterSettings.show_rights_section !== false },
+      { label: 'Nominee', enabled: rightsCenterSettings.show_nominees_section !== false },
+      { label: 'Grievance', enabled: rightsCenterSettings.show_grievance_section !== false },
+      { label: 'Transparency', enabled: rightsCenterSettings.show_transparency_section === true },
+      { label: 'DPO', enabled: rightsCenterSettings.show_dpo_section === true },
+    ];
+    return tabConfig.filter((t) => t.enabled).map((t) => t.label);
+  }, [rightsCenterSettings]);
+
+  useEffect(() => {
+    if (!tabs.includes(activeTab)) {
+      setActiveTab(tabs[0] || 'Consent');
+    }
+  }, [tabs, activeTab]);
   
   // Consent state
   const [consentGroups, setConsentGroups] = useState<ConsentGroup[]>([]);
@@ -50,6 +127,8 @@ export default function NativeRightCenter({
   const [showSaveModal, setShowSaveModal] = useState(false);
   
   // Rights state
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [accessConfirmed, setAccessConfirmed] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   
@@ -86,98 +165,26 @@ export default function NativeRightCenter({
   // Nominee dropdown state
   const [showRelationshipDropdown, setShowRelationshipDropdown] = useState(false);
 
-  // Fetch consents - matches web package logic exactly
+  // Fetch consents (web logic is implemented in the SDK api client).
   const fetchUserConsents = async () => {
     setConsentsLoading(true);
     try {
-      console.log('[NativeRightCenter] Fetching consents for user:', userId);
-      console.log('[NativeRightCenter] Starting dual fetch: /user/{userId} and getAllBanners()');
-      
-      const [userRecords, allBanners] = await Promise.all([
-        api.getUserConsents(userId).catch((err) => {
-          console.warn('[NativeRightCenter] Error fetching user consents, using empty array:', err);
+      const merged = await api
+        .getUserConsents(userId, assetId)
+        .catch((err) => {
+          console.warn('[NativeRightCenter] Error fetching user consents:', err);
           return [];
-        }),
-        api.getAllBanners().catch((err) => {
-          console.warn('[NativeRightCenter] Error fetching all banners, using empty array:', err);
-          return [];
-        }),
-      ]);
-
-      console.log('[NativeRightCenter] Data received - User records:', Array.isArray(userRecords) ? userRecords.length : 0, 'All banners:', Array.isArray(allBanners) ? allBanners.length : 0);
-
-      // Create map of user records by collection_point (matches web package line 227-230)
-      const userByCp = new Map();
-      (Array.isArray(userRecords) ? userRecords : []).forEach((cp: ConsentGroup) => {
-        userByCp.set(cp.collection_point, cp);
-      });
-
-      console.log('[NativeRightCenter] User records mapped to', userByCp.size, 'collection points');
-
-      // Merge all banners with user-specific status (matches web package line 232-258)
-      const merged = (Array.isArray(allBanners) ? allBanners : []).map((cp: ConsentGroup) => {
-        const userCp = userByCp.get(cp.collection_point);
-        const shown_to_principal = !!userCp?.shown_to_principal;
-        
-        // Only keep explicit statuses from user (accepted/declined). Ignore 'pending' (matches web package line 237-242)
-        const userPurposeStatus = new Map(
-          (userCp?.purposes || [])
-            .map((p: any) => ({ id: p.id, consented: normalizeStatus(p.consented) }))
-            .filter((p: any) => p.consented === 'accepted' || p.consented === 'declined')
-            .map((p: any) => [p.id, p.consented])
-        );
-        
-        // Map purposes and determine status (matches web package line 243-256)
-        const purposes = (cp.purposes || []).map((p: any) => {
-          const hasUser = userPurposeStatus.has(p.id);
-          let status;
-          if (hasUser) {
-            // User has explicit status
-            status = userPurposeStatus.get(p.id);
-          } else if (shown_to_principal) {
-            // If the collection point was shown and user has no explicit status logged for this purpose,
-            // treat it as accepted (implicit approval at time of show) - matches web package line 248-251
-            status = 'accepted';
-          } else {
-            // Default to declined if not shown and no user status
-            status = normalizeStatus(p.consented) ?? 'declined';
-          }
-          return { ...p, consented: status };
         });
-        
-        return { ...cp, purposes, shown_to_principal };
-      });
-
-      console.log('[NativeRightCenter] Merged result:', merged.length, 'collection points');
-      if (merged.length > 0) {
-        const totalPurposes = merged.reduce((sum, cp) => sum + (cp.purposes?.length || 0), 0);
-        console.log('[NativeRightCenter] Total purposes across all collection points:', totalPurposes);
-      }
 
       setConsentGroups(merged);
       setInitialConsentGroups(JSON.parse(JSON.stringify(merged)));
-      console.log('[NativeRightCenter] Consents loaded successfully:', merged.length, 'groups');
     } catch (error: any) {
       console.error('[NativeRightCenter] Error fetching consents:', error);
-      // Don't show alert, just log and set empty state
       setConsentGroups([]);
       setInitialConsentGroups([]);
     } finally {
       setConsentsLoading(false);
     }
-  };
-
-  const normalizeStatus = (val: any): 'accepted' | 'declined' | 'pending' => {
-    if (val === 'accepted' || val === 'declined') return val;
-    if (val === 'approved') return 'accepted';
-    if (val === 'rejected') return 'declined';
-    if (typeof val === 'boolean') return val ? 'accepted' : 'declined';
-    if (typeof val === 'string') {
-      const v = val.toLowerCase();
-      if (v === 'yes' || v === 'true') return 'accepted';
-      if (v === 'no' || v === 'false') return 'declined';
-    }
-    return 'pending';
   };
 
   // Fetch DPO
@@ -247,12 +254,38 @@ export default function NativeRightCenter({
     }
   };
 
+  const fetchRightsCenterSettings = async () => {
+    try {
+      const settings = await api.getRightsCenterSettings(assetId).catch(() => null);
+      if (!settings) return;
+      setRightsCenterSettings((prev: any) => ({
+        ...prev,
+        ...settings,
+      }));
+    } catch (err) {
+      console.warn('[NativeRightCenter] Failed to fetch rights center settings:', err);
+    }
+  };
+
   useEffect(() => {
-    fetchUserConsents();
-    fetchDPO();
-    fetchNominees();
-    fetchGrievances();
-  }, [userId]);
+    let cancelled = false;
+    const run = async () => {
+      setIsInitializing(true);
+      await Promise.allSettled([
+        fetchRightsCenterSettings(),
+        fetchUserConsents(),
+        fetchDPO(),
+        fetchNominees(),
+        fetchGrievances(),
+      ]);
+      if (!cancelled) setIsInitializing(false);
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, assetId]);
 
   // Consent handlers
   const handleToggle = (consentId: string, collectionId: string) => {
@@ -335,6 +368,7 @@ export default function NativeRightCenter({
               userId,
               purposes: purposesPayload.map(({ initialStatus, ...rest }: any) => rest),
               action: action as 'approved' | 'revoked' | 'declined',
+              assetId,
             };
 
             if (changedByCollection[collectionId]?.length > 0) {
@@ -364,6 +398,7 @@ export default function NativeRightCenter({
     const nominee = nominees[0];
     const payload: Nominee = {
       user_id: userId,
+      client_user_id: userId,
       ...nomineeForm,
     };
 
@@ -375,6 +410,9 @@ export default function NativeRightCenter({
         const created = await api.createNominee(payload);
         setNominees([created]);
       }
+
+      // Backend may return only success object; refresh to keep local state fully populated.
+      fetchNominees().catch(() => null);
       setEditing(false);
       Alert.alert('Success', 'Nominee saved successfully');
     } catch (error: any) {
@@ -430,6 +468,9 @@ export default function NativeRightCenter({
     try {
       const created = await api.createGrievanceTicket(payload);
       setTickets((prev) => [created, ...prev]);
+
+      // Keep server state and local list synchronized after create.
+      fetchGrievances().catch(() => null);
       setShowGrievanceForm(false);
       setGrievanceForm({ subject: '', category: '', description: '' });
       Alert.alert('Success', 'Grievance ticket created successfully');
@@ -439,46 +480,97 @@ export default function NativeRightCenter({
     }
   };
 
-  const handleDeleteRequest = () => {
-    setDeleteConfirmed(true);
-    setTimeout(() => {
-      setShowDeleteModal(false);
-      setDeleteConfirmed(false);
-    }, 1500);
+  // Rights request handlers (web parity)
+  const handleAccessRequest = async () => {
+    try {
+      await api.createAccessRequest(userId, assetId);
+      setAccessConfirmed(true);
+      setTimeout(() => {
+        setShowAccessModal(false);
+        setAccessConfirmed(false);
+      }, 1500);
+    } catch (error: any) {
+      console.error('[NativeRightCenter] Error creating access request:', error);
+      Alert.alert('Error', 'Failed to submit access request. Please try again.');
+    }
+  };
+
+  const handleDeleteRequest = async () => {
+    try {
+      await api.createDeletionRequest(userId, assetId);
+      setDeleteConfirmed(true);
+      setTimeout(() => {
+        setShowDeleteModal(false);
+        setDeleteConfirmed(false);
+      }, 1500);
+    } catch (error: any) {
+      console.error('[NativeRightCenter] Error creating deletion request:', error);
+      Alert.alert('Error', 'Failed to submit deletion request. Please try again.');
+    }
   };
 
   const nominee = nominees[0] || null;
 
-  return (
-    <View style={styles.container}>
-      {/* Data Principal ID Banner */}
-      <View style={styles.principalBanner}>
-        <Text style={styles.principalText}>Data Principal ID: {userId.slice(0, 6)}</Text>
+  if (isInitializing) {
+    return (
+      <View style={styles.centerContent}>
+        <ActivityIndicator size="large" />
+        <Text style={styles.loadingText}>Loading Rights Center...</Text>
       </View>
+    );
+  }
 
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Tabs Navigation - Wrapped in 2 rows (3+3) */}
-      <View style={styles.tabsContainer}>
+      <View style={[styles.tabsContainer, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
         <View style={styles.tabsRow}>
           {tabs.slice(0, 3).map((tab) => (
             <TouchableOpacity
               key={tab}
               onPress={() => setActiveTab(tab)}
-              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              style={[
+                styles.tab,
+                {
+                  borderColor: theme.textSecondary + '66',
+                  borderBottomColor: activeTab === tab ? theme.button : 'transparent',
+                  backgroundColor: activeTab === tab ? theme.button : 'transparent',
+                },
+              ]}
             >
-              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: activeTab === tab ? theme.buttonText : theme.textPrimary },
+                  activeTab === tab && styles.tabTextActive,
+                ]}
+              >
                 {tab}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
         <View style={styles.tabsRow}>
-          {tabs.slice(3, 6).map((tab) => (
+          {tabs.slice(3).map((tab) => (
             <TouchableOpacity
               key={tab}
               onPress={() => setActiveTab(tab)}
-              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              style={[
+                styles.tab,
+                {
+                  borderColor: theme.textSecondary + '66',
+                  borderBottomColor: activeTab === tab ? theme.button : 'transparent',
+                  backgroundColor: activeTab === tab ? theme.button : 'transparent',
+                },
+              ]}
             >
-              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: activeTab === tab ? theme.buttonText : theme.textPrimary },
+                  activeTab === tab && styles.tabTextActive,
+                ]}
+              >
                 {tab}
               </Text>
             </TouchableOpacity>
@@ -487,9 +579,11 @@ export default function NativeRightCenter({
       </View>
 
       {/* Tab Content */}
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={[styles.content, { backgroundColor: theme.background }]} contentContainerStyle={styles.contentContainer}>
         {activeTab === 'Consent' && (
           <ConsentTab
+            theme={theme}
+            settings={rightsCenterSettings}
             consentGroups={consentGroups}
             consentsLoading={consentsLoading}
             dirty={dirty}
@@ -501,22 +595,57 @@ export default function NativeRightCenter({
 
         {activeTab === 'Rights' && (
           <RightsTab
+            theme={theme}
+            settings={rightsCenterSettings}
+            showAccessModal={showAccessModal}
+            accessConfirmed={accessConfirmed}
+            onAccessRequest={handleAccessRequest}
+            onOpenAccessModal={() => {
+              setAccessConfirmed(false);
+              setShowAccessModal(true);
+            }}
+            onCloseAccessModal={() => {
+              setAccessConfirmed(false);
+              setShowAccessModal(false);
+            }}
             showDeleteModal={showDeleteModal}
             deleteConfirmed={deleteConfirmed}
             onDeleteRequest={handleDeleteRequest}
-            onCloseModal={() => setShowDeleteModal(false)}
-            onOpenModal={() => setShowDeleteModal(true)}
+            onCloseDeleteModal={() => {
+              setDeleteConfirmed(false);
+              setShowDeleteModal(false);
+            }}
+            onOpenDeleteModal={() => {
+              setDeleteConfirmed(false);
+              setShowDeleteModal(true);
+            }}
           />
         )}
 
-        {activeTab === 'Transparency' && <TransparencyTab />}
+        {activeTab === 'Transparency' && (
+          <TransparencyTab
+            theme={theme}
+            description={
+              rightsCenterSettings.transparency_description ||
+              "We collect your data to provide better services and comply with regulations. Your data is stored securely and used only for the purposes you've consented to."
+            }
+          />
+        )}
 
         {activeTab === 'DPO' && (
-          <DPOTab dpoInfo={dpoInfo} loading={dpoLoading} error={dpoError} />
+          <DPOTab
+            theme={theme}
+            settings={rightsCenterSettings}
+            dpoInfo={dpoInfo}
+            loading={dpoLoading}
+            error={dpoError}
+          />
         )}
 
         {activeTab === 'Nominee' && (
           <NomineeTab
+            theme={theme}
+            settings={rightsCenterSettings}
             nominee={nominee}
             editing={editing}
             nomineeForm={nomineeForm}
@@ -533,18 +662,43 @@ export default function NativeRightCenter({
         )}
 
         {activeTab === 'Grievance' && (
-          <GrievanceTab
-            tickets={tickets}
-            loading={ticketsLoading}
-            error={ticketsError}
-            showForm={showGrievanceForm}
-            form={grievanceForm}
-            onFormChange={setGrievanceForm}
-            onSubmit={handleGrievanceSubmit}
-            onToggleForm={() => setShowGrievanceForm(!showGrievanceForm)}
-            showCategoryDropdown={showCategoryDropdown}
-            onToggleCategoryDropdown={() => setShowCategoryDropdown(!showCategoryDropdown)}
-          />
+          rightsCenterSettings.grievance_mode === 'external' ? (
+            <View>
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Grievance</Text>
+              <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>
+                Submit grievances via your organization portal.
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  { backgroundColor: theme.button },
+                  !rightsCenterSettings.grievance_external_url ? { opacity: 0.6 } : null,
+                ]}
+                disabled={!rightsCenterSettings.grievance_external_url}
+                onPress={() => {
+                  if (rightsCenterSettings.grievance_external_url) {
+                    Linking.openURL(rightsCenterSettings.grievance_external_url);
+                  }
+                }}
+              >
+                <Text style={[styles.primaryButtonText, { color: theme.buttonText }]}>Open Grievance Portal</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <GrievanceTab
+              theme={theme}
+              tickets={tickets}
+              loading={ticketsLoading}
+              error={ticketsError}
+              showForm={showGrievanceForm}
+              form={grievanceForm}
+              onFormChange={setGrievanceForm}
+              onSubmit={handleGrievanceSubmit}
+              onToggleForm={() => setShowGrievanceForm(!showGrievanceForm)}
+              showCategoryDropdown={showCategoryDropdown}
+              onToggleCategoryDropdown={() => setShowCategoryDropdown(!showCategoryDropdown)}
+            />
+          )
         )}
       </ScrollView>
 
@@ -609,17 +763,36 @@ interface SelectDropdownProps {
   onSelect: (value: string) => void;
   visible: boolean;
   onToggle: () => void;
+  theme?: any;
 }
 
-function SelectDropdown({ label, placeholder, value, options, onSelect, visible, onToggle }: SelectDropdownProps) {
+function SelectDropdown({ label, placeholder, value, options, onSelect, visible, onToggle, theme }: SelectDropdownProps) {
+  const currentTheme = theme || {
+    background: '#ffffff',
+    textPrimary: '#1e293b',
+    textSecondary: '#64748b',
+    border: '#e2e8f0',
+    button: '#9333ea',
+    hoverBg: '#f3e8ff',
+  };
+
   return (
     <View style={styles.selectContainer}>
-      <Text style={styles.selectLabel}>{label}</Text>
-      <TouchableOpacity style={styles.selectInput} onPress={onToggle}>
-        <Text style={[styles.selectInputText, !value && styles.selectInputPlaceholder]}>
+      <Text style={[styles.selectLabel, { color: currentTheme.textPrimary }]}>{label}</Text>
+      <TouchableOpacity
+        style={[styles.selectInput, { backgroundColor: currentTheme.background, borderColor: currentTheme.border }]}
+        onPress={onToggle}
+      >
+        <Text
+          style={[
+            styles.selectInputText,
+            { color: currentTheme.textPrimary },
+            !value && [styles.selectInputPlaceholder, { color: currentTheme.textSecondary }],
+          ]}
+        >
           {value || placeholder}
         </Text>
-        <Text style={styles.selectArrow}>▼</Text>
+        <Text style={[styles.selectArrow, { color: currentTheme.textSecondary }]}>▼</Text>
       </TouchableOpacity>
       
       <Modal
@@ -633,13 +806,14 @@ function SelectDropdown({ label, placeholder, value, options, onSelect, visible,
           activeOpacity={1}
           onPress={onToggle}
         >
-          <View style={styles.dropdownContainer}>
+          <View style={[styles.dropdownContainer, { backgroundColor: currentTheme.background, borderColor: currentTheme.border }]}> 
             {options.map((option, index) => (
               <TouchableOpacity
                 key={option.value}
                 style={[
                   styles.dropdownOption,
-                  value === option.value && styles.dropdownOptionSelected,
+                  { borderBottomColor: currentTheme.border },
+                  value === option.value && [styles.dropdownOptionSelected, { backgroundColor: currentTheme.hoverBg }],
                   index === options.length - 1 && styles.dropdownOptionLast,
                 ]}
                 onPress={() => {
@@ -650,7 +824,8 @@ function SelectDropdown({ label, placeholder, value, options, onSelect, visible,
                 <Text
                   style={[
                     styles.dropdownOptionText,
-                    value === option.value && styles.dropdownOptionTextSelected,
+                    { color: currentTheme.textPrimary },
+                    value === option.value && [styles.dropdownOptionTextSelected, { color: currentTheme.button }],
                   ]}
                 >
                   {option.label}
@@ -665,7 +840,7 @@ function SelectDropdown({ label, placeholder, value, options, onSelect, visible,
 }
 
 // Tab Components (to be implemented in next steps)
-function ConsentTab({ consentGroups, consentsLoading, dirty, onToggle, onSave, onInfoClick }: any) {
+function ConsentTab({ theme, settings, consentGroups, consentsLoading, dirty, onToggle, onSave, onInfoClick }: any) {
   if (consentsLoading) {
     return (
       <View style={styles.centerContent}>
@@ -675,15 +850,37 @@ function ConsentTab({ consentGroups, consentsLoading, dirty, onToggle, onSave, o
     );
   }
 
+  const getDataElementsText = (purpose: any, collectionPoint: ConsentGroup) => {
+    const purposeElements = Array.isArray(purpose.data_elements) ? purpose.data_elements : [];
+    if (purposeElements.length > 0) {
+      return purposeElements
+        .map((el: any) =>
+          typeof el === 'string' || typeof el === 'number'
+            ? String(el)
+            : el?.name || el?.label || el?.title || el?.id
+        )
+        .filter(Boolean)
+        .join(', ');
+    }
+
+    const cpElements = Array.isArray(collectionPoint.data_elements) ? collectionPoint.data_elements : [];
+    return cpElements
+      .map((el: any) => el?.name || el?.label || el?.title || el?.id)
+      .filter(Boolean)
+      .join(', ') || 'Not specified';
+  };
+
   return (
     <View style={styles.tabContent}>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleContainer}>
-          <Text style={styles.sectionTitle}>Manage your Consents here!</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
+            {settings?.consents_section_title || 'Manage your Consents here!'}
+          </Text>
         </View>
         {dirty && (
-          <TouchableOpacity style={styles.saveButton} onPress={onSave}>
-            <Text style={styles.saveButtonText}>Save Changes</Text>
+          <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.button }]} onPress={onSave}>
+            <Text style={[styles.saveButtonText, { color: theme.buttonText }]}>Save Changes</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -693,64 +890,152 @@ function ConsentTab({ consentGroups, consentsLoading, dirty, onToggle, onSave, o
           <Text style={styles.emptyText}>You currently have no consent records to display.</Text>
         </View>
       ) : (
-        consentGroups.map((cp: ConsentGroup) => (
-          <View key={cp.collection_point} style={styles.consentCard}>
-            <Text style={styles.consentCardTitle}>{cp.title}</Text>
-            {(cp.purposes || []).map((p) => (
-              <View key={p.id} style={styles.purposeCard}>
-                <View style={styles.purposeHeader}>
-                  <Text style={styles.purposeTitle}>{p.name}</Text>
-                  <View style={styles.purposeHeaderRight}>
-                    <TouchableOpacity onPress={() => onInfoClick({
-                      title: p.name,
-                      description: p.description,
-                      expiry: p.expiry_period,
-                      collectionPoint: cp.title,
-                      type: p.is_mandatory ? 'Mandatory' : 'Optional',
-                    })}>
-                      <Text style={styles.infoIcon}>ℹ️</Text>
-                    </TouchableOpacity>
-                    <Text style={[styles.badge, p.is_mandatory && styles.badgeMandatory]}>
-                      {p.is_mandatory ? 'MANDATORY' : 'OPTIONAL'}
+        <ScrollView>
+          {consentGroups.flatMap((cp: ConsentGroup) =>
+            (cp.purposes || []).map((p: any) => (
+              <View key={`${cp.collection_point}-${p.id}`} style={[styles.purposeCard, { borderColor: theme.border }]}>
+                {/* Header Row: Purpose name, badge, and toggle */}
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.purposeHeaderLeft}>
+                    <Text style={[styles.purposeTitle, { color: theme.textPrimary }]}>{p.name}</Text>
+                    <Text
+                      style={[
+                        styles.badge,
+                        p.is_mandatory ? styles.badgeMandatory : styles.badgeOptional,
+                      ]}
+                    >
+                      {p.is_mandatory ? 'Necessary' : 'Optional'}
+                    </Text>
+                  </View>
+                  <View style={styles.toggleSection}>
+                    <Switch
+                      value={p.consented === 'accepted'}
+                      onValueChange={() => onToggle(p.id, cp.collection_point)}
+                      trackColor={{ false: '#ccc', true: theme.button }}
+                    />
+                  </View>
+                </View>
+
+                {/* Expiry Period */}
+                <View style={styles.metaRow}>
+                  <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Expiry Period:</Text>
+                  <Text style={[styles.metaValue, { color: theme.textPrimary }]}>
+                    {p.expiry_period || 'Not specified'}
+                  </Text>
+                </View>
+
+                {/* Processing Activity */}
+                <View style={styles.metaRow}>
+                  <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Processing Activity:</Text>
+                  <Text style={[styles.metaValue, { color: theme.textPrimary }]}>
+                    {p.processing_activity || cp.title || 'Not specified'}
+                  </Text>
+                </View>
+
+                {/* Show and Consented Status */}
+                <View style={styles.statusRow}>
+                  <View style={styles.statusItem}>
+                    <Text style={[styles.statusLabel, { color: theme.textSecondary }]}>Show:</Text>
+                    <Text
+                      style={[
+                        styles.statusValue,
+                        cp.shown_to_principal
+                          ? { backgroundColor: theme.button, color: theme.buttonText }
+                          : { backgroundColor: '#1f2937', color: '#ffffff' },
+                      ]}
+                    >
+                      {cp.shown_to_principal ? 'Yes' : 'No'}
+                    </Text>
+                  </View>
+                  <View style={styles.statusItem}>
+                    <Text style={[styles.statusLabel, { color: theme.textSecondary }]}>Consented:</Text>
+                    <Text
+                      style={[
+                        styles.statusValue,
+                        p.consented === 'accepted'
+                          ? { backgroundColor: theme.button, color: theme.buttonText }
+                          : { backgroundColor: '#ef4444', color: '#ffffff' },
+                      ]}
+                    >
+                      {p.consented === 'accepted' ? 'Yes' : 'No'}
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.purposeDescription}>{p.description}</Text>
-                <View style={styles.purposeDetails}>
-                  <Text style={styles.detailText}>Expiry: {p.expiry_period}</Text>
-                  <Text style={styles.detailText}>Collection Point: {cp.title}</Text>
-                </View>
-                <View style={styles.purposeStatus}>
-                  <Text style={styles.statusText}>
-                    Shown to Principal: {cp.shown_to_principal ? 'Yes' : 'No'}
+
+                {/* Data Elements */}
+                <View style={styles.metaRow}>
+                  <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Data Elements:</Text>
+                  <Text style={[styles.metaValue, { color: theme.textPrimary }]}>
+                    {getDataElementsText(p, cp)}
                   </Text>
-                  <Text style={styles.statusText}>
-                    Consented: {p.consented === 'accepted' ? 'Yes' : 'No'}
-                  </Text>
-                </View>
-                <View style={styles.toggleContainer}>
-                  <Switch
-                    value={p.consented === 'accepted'}
-                    onValueChange={() => onToggle(p.id, cp.collection_point)}
-                  />
                 </View>
               </View>
-            ))}
-          </View>
-        ))
+            ))
+          )}
+        </ScrollView>
       )}
     </View>
   );
 }
 
-function RightsTab({ showDeleteModal, deleteConfirmed, onDeleteRequest, onCloseModal, onOpenModal }: any) {
+function RightsTab({
+  theme,
+  settings,
+  showAccessModal,
+  accessConfirmed,
+  onAccessRequest,
+  onCloseAccessModal,
+  onOpenAccessModal,
+  showDeleteModal,
+  deleteConfirmed,
+  onDeleteRequest,
+  onCloseDeleteModal,
+  onOpenDeleteModal,
+}: any) {
   return (
     <View>
-      <Text style={styles.sectionTitle}>Your Data Rights</Text>
-      <Text style={styles.sectionSubtitle}>You can access, correct, delete, or export your data.</Text>
-      <TouchableOpacity style={styles.dangerButton} onPress={onOpenModal}>
-        <Text style={styles.dangerButtonText}>Request Data Deletion</Text>
+      <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
+        {settings?.rights_section_title || 'Your Data Rights'}
+      </Text>
+      <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>Request access to your data or request deletion.</Text>
+
+      <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.button }]} onPress={onOpenAccessModal}>
+        <Text style={[styles.primaryButtonText, { color: theme.buttonText }]}>Request Data Access</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.button }]} onPress={onOpenDeleteModal}>
+        <Text style={[styles.primaryButtonText, { color: theme.buttonText }]}>Request Data Deletion</Text>
+      </TouchableOpacity>
+
+      <Modal visible={showAccessModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {!accessConfirmed ? (
+              <>
+                <Text style={styles.modalTitle}>Confirm Data Access Request</Text>
+                <Text style={styles.modalSubtitle}>
+                  Are you sure you want to request access to your personal data?
+                </Text>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.primaryButton} onPress={onAccessRequest}>
+                    <Text style={styles.primaryButtonText}>Confirm Access</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.secondaryButton} onPress={onCloseAccessModal}>
+                    <Text style={styles.secondaryButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalTitle}>Request Submitted</Text>
+                <Text style={styles.modalSubtitle}>
+                  Your data access request has been submitted successfully!
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={showDeleteModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -765,7 +1050,7 @@ function RightsTab({ showDeleteModal, deleteConfirmed, onDeleteRequest, onCloseM
                   <TouchableOpacity style={styles.dangerButton} onPress={onDeleteRequest}>
                     <Text style={styles.dangerButtonText}>Confirm Deletion</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.secondaryButton} onPress={onCloseModal}>
+                  <TouchableOpacity style={styles.secondaryButton} onPress={onCloseDeleteModal}>
                     <Text style={styles.secondaryButtonText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
@@ -785,19 +1070,16 @@ function RightsTab({ showDeleteModal, deleteConfirmed, onDeleteRequest, onCloseM
   );
 }
 
-function TransparencyTab() {
+function TransparencyTab({ theme, description }: { theme: any; description: string }) {
   return (
     <View>
-      <Text style={styles.sectionTitle}>Transparency</Text>
-      <Text style={styles.sectionSubtitle}>Learn how we collect, use, and protect your data</Text>
-      <Text style={styles.transparencyText}>
-        We collect your data to provide better services and comply with regulations. Your data is stored securely and used only for the purposes you've consented to.
-      </Text>
+      <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Transparency</Text>
+      <Text style={[styles.transparencyText, { color: theme.textSecondary }]}>{description}</Text>
     </View>
   );
 }
 
-function DPOTab({ dpoInfo, loading, error }: any) {
+function DPOTab({ theme, settings, dpoInfo, loading, error }: any) {
   if (loading) {
     return (
       <View style={styles.centerContent}>
@@ -817,37 +1099,52 @@ function DPOTab({ dpoInfo, loading, error }: any) {
 
   return (
     <View>
-      <Text style={styles.sectionTitle}>Data Protection Officer (DPO) Contact</Text>
-      <Text style={styles.sectionSubtitle}>Contact our DPO for data protection matters and privacy concerns</Text>
+      <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>DPO Information</Text>
       {dpoInfo && (
-        <View style={styles.dpoCard}>
+        <View style={[styles.dpoCard, { backgroundColor: theme.background, borderColor: theme.border }]}> 
           <View style={styles.dpoItem}>
-            <Text style={styles.dpoLabel}>Name</Text>
-            <Text style={styles.dpoValue}>{dpoInfo.full_name || 'N/A'}</Text>
+            <Text style={[styles.dpoLabel, { color: theme.textPrimary }]}>Full Name</Text>
+            <Text style={[styles.dpoValue, { color: theme.textSecondary }]}>{dpoInfo.full_name || 'Not available'}</Text>
           </View>
           <View style={styles.dpoItem}>
-            <Text style={styles.dpoLabel}>Email</Text>
-            <Text style={styles.dpoValue}>{dpoInfo.email || 'N/A'}</Text>
+            <Text style={[styles.dpoLabel, { color: theme.textPrimary }]}>Email</Text>
+            <Text style={[styles.dpoValue, { color: theme.textSecondary }]}>{dpoInfo.email || 'Not available'}</Text>
           </View>
           <View style={styles.dpoItem}>
-            <Text style={styles.dpoLabel}>Appointment Date</Text>
-            <Text style={styles.dpoValue}>{dpoInfo.appointment_date || 'N/A'}</Text>
+            <Text style={[styles.dpoLabel, { color: theme.textPrimary }]}>Appointment Date</Text>
+            <Text style={[styles.dpoValue, { color: theme.textSecondary }]}>{dpoInfo.appointment_date || 'Not available'}</Text>
           </View>
-          <View style={styles.dpoItem}>
-            <Text style={styles.dpoLabel}>Qualifications</Text>
-            <Text style={styles.dpoValue}>{dpoInfo.qualifications || 'N/A'}</Text>
-          </View>
-          <View style={styles.dpoItem}>
-            <Text style={styles.dpoLabel}>Responsibilities</Text>
-            <Text style={styles.dpoValue}>{dpoInfo.responsibilities || 'N/A'}</Text>
-          </View>
+          {settings?.dpo_qualifications_enabled && (
+            <View style={styles.dpoItem}>
+              <Text style={[styles.dpoLabel, { color: theme.textPrimary }]}>Qualifications</Text>
+              <Text style={[styles.dpoValue, { color: theme.textSecondary }]}>{dpoInfo.qualifications || 'Not available'}</Text>
+            </View>
+          )}
+          {settings?.dpo_responsibilities_enabled && (
+            <View style={styles.dpoItem}>
+              <Text style={[styles.dpoLabel, { color: theme.textPrimary }]}>Responsibilities</Text>
+              <Text style={[styles.dpoValue, { color: theme.textSecondary }]}>{dpoInfo.responsibilities || 'Not available'}</Text>
+            </View>
+          )}
+          {settings?.dpo_working_hours_enabled && (
+            <View style={styles.dpoItem}>
+              <Text style={[styles.dpoLabel, { color: theme.textPrimary }]}>Working Hours</Text>
+              <Text style={[styles.dpoValue, { color: theme.textSecondary }]}>{dpoInfo.working_hours || 'Not available'}</Text>
+            </View>
+          )}
+          {settings?.dpo_response_time_enabled && (
+            <View style={styles.dpoItem}>
+              <Text style={[styles.dpoLabel, { color: theme.textPrimary }]}>Response Time</Text>
+              <Text style={[styles.dpoValue, { color: theme.textSecondary }]}>{dpoInfo.response_time || 'Not available'}</Text>
+            </View>
+          )}
         </View>
       )}
     </View>
   );
 }
 
-function NomineeTab({ nominee, editing, nomineeForm, loading, error, onFormChange, onSubmit, onEdit, onCancel, onDelete, showRelationshipDropdown, onToggleRelationshipDropdown }: any) {
+function NomineeTab({ theme, settings, nominee, editing, nomineeForm, loading, error, onFormChange, onSubmit, onEdit, onCancel, onDelete, showRelationshipDropdown, onToggleRelationshipDropdown }: any) {
   if (loading) {
     return (
       <View style={styles.centerContent}>
@@ -867,8 +1164,8 @@ function NomineeTab({ nominee, editing, nomineeForm, loading, error, onFormChang
 
   return (
     <View>
-      <Text style={styles.sectionTitle}>Appoint Nominee</Text>
-      <Text style={styles.sectionSubtitle}>Appoint someone to manage your data rights on your behalf</Text>
+      <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{settings?.nominees_section_title || 'Appoint Nominee'}</Text>
+      <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>Appoint someone to manage your data rights on your behalf</Text>
       
       <View style={styles.warningBox}>
         <Text style={styles.warningText}>
@@ -931,6 +1228,7 @@ function NomineeTab({ nominee, editing, nomineeForm, loading, error, onFormChang
             onSelect={(value) => onFormChange({ ...nomineeForm, relationship: value })}
             visible={showRelationshipDropdown}
             onToggle={onToggleRelationshipDropdown}
+            theme={theme}
           />
           <TextInput
             style={styles.input}
@@ -972,7 +1270,7 @@ function NomineeTab({ nominee, editing, nomineeForm, loading, error, onFormChang
   );
 }
 
-function GrievanceTab({ tickets, loading, error, showForm, form, onFormChange, onSubmit, onToggleForm, showCategoryDropdown, onToggleCategoryDropdown }: any) {
+function GrievanceTab({ theme, tickets, loading, error, showForm, form, onFormChange, onSubmit, onToggleForm, showCategoryDropdown, onToggleCategoryDropdown }: any) {
   if (loading) {
     return (
       <View style={styles.centerContent}>
@@ -994,19 +1292,20 @@ function GrievanceTab({ tickets, loading, error, showForm, form, onFormChange, o
     <View>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleContainer}>
-          <Text style={styles.sectionTitle}>Grievance Tickets</Text>
-          <Text style={styles.sectionSubtitle}>Submit privacy concerns or view your existing tickets</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Grievance Tickets</Text>
+          <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>Submit privacy concerns or view your existing tickets</Text>
         </View>
-        <TouchableOpacity style={styles.primaryButton} onPress={onToggleForm}>
-          <Text style={styles.primaryButtonText}>Create New Ticket</Text>
+        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.button }]} onPress={onToggleForm}>
+          <Text style={[styles.primaryButtonText, { color: theme.buttonText }]}>Create New Ticket</Text>
         </TouchableOpacity>
       </View>
 
       {showForm && (
         <View style={styles.form}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.textPrimary }]}
             placeholder="Subject *"
+            placeholderTextColor={theme.textSecondary}
             value={form.subject}
             onChangeText={(text) => onFormChange({ ...form, subject: text })}
           />
@@ -1022,10 +1321,12 @@ function GrievanceTab({ tickets, loading, error, showForm, form, onFormChange, o
             onSelect={(value) => onFormChange({ ...form, category: value })}
             visible={showCategoryDropdown}
             onToggle={onToggleCategoryDropdown}
+            theme={theme}
           />
           <TextInput
-            style={[styles.input, styles.textarea]}
+            style={[styles.input, styles.textarea, { backgroundColor: theme.background, borderColor: theme.border, color: theme.textPrimary }]}
             placeholder="Description *"
+            placeholderTextColor={theme.textSecondary}
             multiline
             numberOfLines={4}
             value={form.description}
@@ -1043,21 +1344,35 @@ function GrievanceTab({ tickets, loading, error, showForm, form, onFormChange, o
       )}
 
       <View style={styles.ticketsSection}>
-        <Text style={styles.ticketsTitle}>Your Tickets</Text>
+        <Text style={[styles.ticketsTitle, { color: theme.textPrimary }]}>Your Tickets</Text>
         {tickets.length === 0 ? (
           <View style={styles.centerContent}>
-            <Text style={styles.emptyText}>No tickets found. Create your first grievance ticket above.</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No tickets found. Create your first grievance ticket above.</Text>
           </View>
         ) : (
-          tickets.map((ticket: GrievanceTicket, index: number) => (
-            <View key={index} style={styles.ticketCard}>
-              <View style={styles.ticketHeader}>
-                <Text style={styles.ticketSubject}>{ticket.subject}</Text>
-                <Text style={styles.ticketStatus}>{ticket.status || 'Open'}</Text>
+          tickets.map((ticket: GrievanceTicket, index: number) => {
+            const ticketRef = (ticket as any).ticket_id || ticket.id;
+
+            return (
+              <View key={index} style={[styles.ticketCard, { backgroundColor: theme.background, borderColor: theme.border }]}> 
+                <View style={styles.ticketHeader}>
+                  <Text style={[styles.ticketSubject, { color: theme.textPrimary }]}>{ticket.subject}</Text>
+                  <Text style={[styles.ticketStatus, { backgroundColor: theme.successBg, color: theme.successText }]}>
+                    {(ticket.status || 'Open').toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={[styles.ticketDescription, { color: theme.textSecondary }]}>{ticket.description}</Text>
+                <View style={styles.ticketMetaRow}>
+                  {!!ticketRef && (
+                    <Text style={[styles.ticketMetaItem, { color: theme.textPrimary }]}>Ticket: {ticketRef}</Text>
+                  )}
+                  {!!ticket.category && (
+                    <Text style={[styles.ticketMetaItem, { color: theme.textPrimary }]}>Category: {ticket.category}</Text>
+                  )}
+                </View>
               </View>
-              <Text style={styles.ticketDescription}>{ticket.description}</Text>
-            </View>
-          ))
+            );
+          })
         )}
       </View>
     </View>
@@ -1080,7 +1395,7 @@ const styles = StyleSheet.create({
     color: '#1e293b',
   },
   tabsContainer: {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
     paddingVertical: 8,
@@ -1109,7 +1424,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   tabTextActive: {
-    color: '#9333ea',
     fontWeight: '600',
   },
   content: {
@@ -1275,6 +1589,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     minWidth: 140,
     alignItems: 'center',
+    marginTop: 16,
   },
   primaryButtonText: {
     color: '#ffffff',
@@ -1300,6 +1615,7 @@ const styles = StyleSheet.create({
   },
   dpoCard: {
     backgroundColor: '#ffffff',
+    borderWidth: 1,
     borderRadius: 8,
     padding: 16,
     marginTop: 16,
@@ -1409,6 +1725,7 @@ const styles = StyleSheet.create({
   },
   dropdownContainer: {
     backgroundColor: '#ffffff',
+    borderWidth: 1,
     borderRadius: 8,
     minWidth: 280,
     maxWidth: '90%',
@@ -1453,6 +1770,7 @@ const styles = StyleSheet.create({
   },
   ticketCard: {
     backgroundColor: '#ffffff',
+    borderWidth: 1,
     borderRadius: 8,
     padding: 16,
     marginBottom: 12,
@@ -1482,6 +1800,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     lineHeight: 20,
+  },
+  ticketMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 10,
+  },
+  ticketMetaItem: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
@@ -1542,6 +1870,72 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     marginTop: 16,
+  },
+  // New styles for improved Consent Tab
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  purposeHeaderLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  toggleSection: {
+    marginLeft: 12,
+  },
+  metaRow: {
+    marginBottom: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+  },
+  metaLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  metaValue: {
+    fontSize: 12,
+    flex: 1,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    gap: 12,
+  },
+  statusItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusYes: {
+    backgroundColor: '#dcfce7',
+    color: '#166534',
+  },
+  statusNo: {
+    backgroundColor: '#fee2e2',
+    color: '#991b1b',
+  },
+  badgeOptional: {
+    backgroundColor: '#dbeafe',
+    color: '#0c4a6e',
   },
 });
 

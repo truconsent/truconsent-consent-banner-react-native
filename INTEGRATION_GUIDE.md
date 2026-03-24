@@ -108,7 +108,7 @@ If you're using Expo, add your TruConsent credentials to `app.json`:
     "extra": {
       "truConsentApiKey": "your-api-key-here",
       "truConsentOrganizationId": "your-organization-id",
-      "truConsentApiBaseUrl": "https://your-api-base-url.com/banners"
+      "truConsentApiUrl": "https://your-api-url.com"
     }
   }
 }
@@ -125,7 +125,7 @@ Create a `.env` file:
 ```env
 TRUCONSENT_API_KEY=your-api-key-here
 TRUCONSENT_ORG_ID=your-organization-id
-TRUCONSENT_API_BASE_URL=https://your-api-base-url.com/banners
+TRUCONSENT_API_URL=https://your-api-url.com
 ```
 
 Install `react-native-dotenv`:
@@ -144,7 +144,7 @@ Create a config file:
 export const TruConsentConfig = {
   apiKey: 'your-api-key-here',
   organizationId: 'your-organization-id',
-  apiBaseUrl: 'https://your-api-base-url.com/banners',
+  apiUrl: 'https://your-api-url.com',
   companyName: 'Your Company Name',
   logoUrl: undefined, // Optional
 };
@@ -488,12 +488,12 @@ import Constants from 'expo-constants'; // If using Expo
 const extra = (Constants.expoConfig?.extra ?? {}) as {
   truConsentApiKey?: string;
   truConsentOrganizationId?: string;
-  truConsentApiBaseUrl?: string;
+  truConsentApiUrl?: string;
 };
 
 const TRUCONSENT_API_KEY = extra.truConsentApiKey ?? 'your-api-key';
 const TRUCONSENT_ORG_ID = extra.truConsentOrganizationId ?? 'your-org-id';
-const TRUCONSENT_API_BASE_URL = extra.truConsentApiBaseUrl ?? 'https://your-api-url.com/banners';
+const TRUCONSENT_API_URL = extra.truConsentApiUrl ?? 'https://your-api-url.com';
 
 export default function RightsCenterScreen() {
   const { user } = useAuth();
@@ -557,7 +557,7 @@ export default function RightsCenterScreen() {
         userId={userId}
         apiKey={TRUCONSENT_API_KEY}
         organizationId={TRUCONSENT_ORG_ID}
-        apiBaseUrl={TRUCONSENT_API_BASE_URL}
+        apiUrl={TRUCONSENT_API_URL}
       />
     </View>
   );

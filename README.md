@@ -62,7 +62,7 @@ Main component for displaying the consent banner modal.
 - `organizationId` (string, required): Organization ID
 - `bannerId` (string, required): Banner/Collection Point ID
 - `userId` (string, required): User ID for consent tracking
-- `apiBaseUrl` (string, optional): Base URL for API
+- `apiUrl` (string, optional): TruAPI root URL (e.g. `https://api-dev.truconsent.io`)
 - `logoUrl` (string, optional): Company logo URL
 - `companyName` (string, optional): Company name
 - `onClose` (function, optional): Callback when modal closes

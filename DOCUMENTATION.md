@@ -203,7 +203,7 @@ The main component for displaying consent banners in a modal overlay.
 | `organizationId` | `string` | Yes | - | Organization identifier |
 | `bannerId` | `string` | Yes | - | Banner/Collection Point ID to display |
 | `userId` | `string` | Yes | - | Unique user identifier for consent tracking |
-| `apiBaseUrl` | `string` | No | `'https://rdwcymn5poo6zbzg5fa5xzjsqy0zzcpm.lambda-url.ap-south-1.on.aws/banners'` | Base URL for the TruConsent API |
+| `apiUrl` | `string` | No  | TruAPI root URL for consent + banners endpoints |
 | `logoUrl` | `string` | No | - | URL of the company logo to display in the banner |
 | `companyName` | `string` | No | `'Mars Company'` | Company name to display in the banner |
 | `onClose` | `(action: ConsentAction) => void` | No | - | Callback function called when the modal closes. Receives the consent action type. |
@@ -284,7 +284,7 @@ interface FetchBannerConfig {
   bannerId: string;
   apiKey: string;
   organizationId: string;
-  apiBaseUrl?: string;
+  apiUrl?: string;
 }
 ```
 
@@ -410,7 +410,7 @@ async function fetchBanner(config: FetchBannerConfig): Promise<Banner>
 - `config.bannerId`: Banner ID to fetch
 - `config.apiKey`: API key for authentication
 - `config.organizationId`: Organization ID
-- `config.apiBaseUrl`: Optional base URL (defaults to production URL)
+- `config.apiUrl`: TruAPI root URL (e.g. `https://api-dev.truconsent.io`)
 
 **Returns:** Promise resolving to a `Banner` object
 
@@ -456,7 +456,7 @@ async function submitConsent(config: SubmitConsentConfig): Promise<any>
 - `config.apiKey`: API key for authentication
 - `config.organizationId`: Organization ID
 - `config.requestId`: Optional request ID for tracking
-- `config.apiBaseUrl`: Optional base URL
+- `config.apiUrl`: TruAPI root URL
 
 **Returns:** Promise resolving to API response
 
@@ -774,7 +774,7 @@ interface TruConsentConfig {
   organizationId: string;
   bannerId: string;
   userId: string;
-  apiBaseUrl?: string;
+  apiUrl?: string;
   logoUrl?: string;
   companyName?: string;
   onClose?: (action: ConsentAction) => void;
@@ -1125,7 +1125,7 @@ function App() {
       organizationId="your-org-id"
       bannerId="your-banner-id"
       userId="user-123"
-      apiBaseUrl="https://custom-api.example.com/banners"
+      apiUrl="https://custom-api.example.com"
       onClose={(action) => console.log(action)}
     />
   );

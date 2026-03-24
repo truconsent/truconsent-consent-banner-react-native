@@ -108,7 +108,13 @@ export interface Organization {
   logo_url?: string;
 }
 
-export type ConsentAction = 'approved' | 'declined' | 'no_action' | 'revoked' | 'partial_consent';
+export type ConsentAction =
+  | 'approved'
+  | 'declined'
+  | 'no_action'
+  | 'revoked'
+  | 'partial_consent'
+  | 'notice_shown';
 
 export interface ConsentRequest {
   userId: string;
@@ -118,11 +124,22 @@ export interface ConsentRequest {
 }
 
 export interface TruConsentConfig {
-  apiKey: string;
+  apiKey?: string;
   organizationId: string;
   bannerId: string;
   userId: string;
-  apiBaseUrl?: string;
+  /**
+   * Web SDK parity:
+   * - Used as the base for routes like `/api/v1/banners/...` and `/api/v1/consent/...`.
+   */
+  apiUrl?: string;
+  assetId?: string;
+  /**
+   * Web SDK parity: token-based auth.
+   * If both are provided, `token` takes precedence.
+   */
+  token?: string;
+  authToken?: string;
   logoUrl?: string;
   companyName?: string;
   onClose?: (action: ConsentAction) => void;

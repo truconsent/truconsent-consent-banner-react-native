@@ -40,7 +40,7 @@ export function useBanner(config: FetchBannerConfig | null): UseBannerResult {
 
   useEffect(() => {
     loadBanner();
-  }, [config?.bannerId, config?.apiKey, config?.organizationId, config?.apiBaseUrl]);
+  }, [config?.bannerId, config?.apiKey, config?.organizationId, config?.apiUrl]);
 
   return {
     banner,
