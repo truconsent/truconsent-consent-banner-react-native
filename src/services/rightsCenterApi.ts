@@ -254,7 +254,17 @@ class RightsCenterApi {
         if (response.status === 404 && (endpoint.includes('/user/') || endpoint.includes('/banners'))) {
           return [] as T;
         }
-        console.error('[RightsCenterApi] Error response (api):', errorText.substring(0, 200));
+        const isExpectedRightsRouteMismatch =
+          response.status === 404 &&
+          endpoint.includes('/rights-requests/') &&
+          errorText.toLowerCase().includes('rights request not found');
+
+        if (isExpectedRightsRouteMismatch) {
+          console.warn('[RightsCenterApi] Expected rights route mismatch, fallback will be attempted:', endpoint);
+        } else {
+          console.error('[RightsCenterApi] Error response (api):', errorText.substring(0, 200));
+        }
+
         throw new Error(
           `API Error ${response.status}: ${errorText.substring(0, 100) || response.statusText}`
         );
@@ -273,7 +283,10 @@ class RightsCenterApi {
         throw new Error('Invalid response format: expected JSON');
       }
     } catch (error: any) {
-      console.error('[RightsCenterApi] Request failed (api):', error);
+      const isExpectedRightsRouteMismatch = this.isRightsRequestRouteMismatch(error);
+      if (!isExpectedRightsRouteMismatch) {
+        console.error('[RightsCenterApi] Request failed (api):', error);
+      }
       if (error.name === 'AbortError') {
         throw new Error(`Network timeout (${this.requestTimeout}ms): Request took too long`);
       }
@@ -364,17 +377,24 @@ class RightsCenterApi {
         throw error;
       }
 
-      // Fallback for api-dev routing issue where /rights-requests/access-request
-      // is incorrectly resolved to /rights-requests/{request_id}.
-      await this.requestApi('/api/v1/grievance', {
-        method: 'POST',
-        body: JSON.stringify({
-          subject: 'Data Access Request',
-          description: 'User requested access to personal data from Rights Center.',
-          category: 'access',
-          client_user_id: userId,
-        }),
-      });
+      // Do NOT fallback to grievance for access requests.
+      // Access and deletion must both be logged in right_center_request (Request Logs).
+      // Retry a trailing-slash variant for proxy/router compatibility.
+      try {
+        await this.requestApi('/api/v1/rights-requests/access-request/', {
+          method: 'POST',
+          body: JSON.stringify({
+            user_id: userId,
+            status: 'pending',
+            metadata,
+          }),
+        });
+        return;
+      } catch {
+        throw new Error(
+          'Access request endpoint is misrouted in this environment. Access requests are restricted to Request Logs only and will not be sent to Grievance.'
+        );
+      }
     }
   }
 
@@ -399,16 +419,24 @@ class RightsCenterApi {
         throw error;
       }
 
-      // Fallback for api-dev routing issue where /rights-requests/deletion-request
-      // is incorrectly resolved to /rights-requests/{request_id}.
-      await this.requestApi('/api/v1/grievance/deletion-request', {
-        method: 'POST',
-        body: JSON.stringify({
-          user_id: userId,
-          reason: 'User requested data deletion from Rights Center',
-          metadata,
-        }),
-      });
+      // Do NOT fallback to grievance deletion endpoint.
+      // Deletion requests must be logged only in right_center_request (Request Logs).
+      // Retry a trailing-slash variant for proxy/router compatibility.
+      try {
+        await this.requestApi('/api/v1/rights-requests/deletion-request/', {
+          method: 'POST',
+          body: JSON.stringify({
+            user_id: userId,
+            status: 'pending',
+            metadata,
+          }),
+        });
+        return;
+      } catch {
+        throw new Error(
+          'Deletion request endpoint is misrouted in this environment. Deletion requests are restricted to Request Logs only and will not be sent to Grievance.'
+        );
+      }
     }
   }
 
